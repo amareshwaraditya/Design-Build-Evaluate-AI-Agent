@@ -1,14 +1,14 @@
 import streamlit as st
-from src.adaptation import FeedbackPolicy
+from src.runtime import answer
 
-st.set_page_config(page_title="Phase 7 - Adaptive Behaviour")
-st.title("Phase 7 — Adaptive Behaviour & Feedback")
-st.caption("Rubric: Adaptive Behaviour & Feedback (5 pts)")
-if "feedback" not in st.session_state:
-    st.session_state.feedback = FeedbackPolicy()
-rating = st.slider("Rate the last response", 1, 5, 3)
-if st.button("Record feedback"):
-    st.session_state.feedback.add(rating)
-policy = st.session_state.feedback.instructions()
-st.json(policy)
-st.table({"Before feedback": ["Professional tone; normal verbosity"], "After repeated low ratings": ["Empathetic tone; detailed explanation; proactive next step"]})
+st.title("Feedback-Adapted Support")
+if "feedback" not in st.session_state: st.session_state.feedback = []
+rating = st.slider("Rate the previous response", 1, 5, 3)
+if st.button("Save feedback"):
+    st.session_state.feedback.append(rating)
+avg = sum(st.session_state.feedback[-10:]) / len(st.session_state.feedback[-10:]) if st.session_state.feedback else 3
+tone = "empathetic" if avg < 3 else "professional"
+st.write({"ratings": st.session_state.feedback, "rolling_average": round(avg, 2), "current_tone": tone})
+message = st.text_input("Repeat a support question", "My package is delayed")
+if st.button("Generate adapted response"):
+    st.json(answer(message, feedback={"tone": tone}))

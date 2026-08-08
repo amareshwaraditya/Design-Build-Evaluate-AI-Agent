@@ -1,19 +1,16 @@
 import streamlit as st
-from src.planning import SessionMemory, decompose
+from src.runtime import answer
 
-st.set_page_config(page_title="Phase 6 - Planning and Memory")
-st.title("Phase 6 — Planning, Memory & Context")
-st.caption("Rubric: Agent Architecture, Planning & Memory (15 pts)")
-message = st.text_input("Multi-intent request", "Check my order and tell me whether it is under warranty")
-st.write("Planned steps:")
-for step in decompose(message):
-    st.write(f"- {step}")
-if "memory" not in st.session_state:
-    st.session_state.memory = SessionMemory()
-turn = st.text_input("Add a conversation turn", "My order is ORD-10001")
-if st.button("Store turn"):
-    st.session_state.memory.add(turn, "Stored response")
-st.write(f"Stored turns: {len(st.session_state.memory.turns)} / {st.session_state.memory.max_turns}")
-if st.button("Reset session memory"):
-    st.session_state.memory.reset()
-    st.success("Memory reset completed.")
+st.title("Multi-step Support Conversation")
+if "conversation" not in st.session_state: st.session_state.conversation = []
+message = st.text_input("Customer message", "Please check order ORD-10001")
+if st.button("Send message"):
+    output = answer(message, memory=st.session_state.conversation)
+    st.session_state.conversation.append({"user": message, "assistant": output["response"]})
+for turn in st.session_state.conversation:
+    st.chat_message("user").write(turn["user"])
+    st.chat_message("assistant").write(turn["assistant"])
+if st.button("Reset customer session"):
+    st.session_state.conversation = []
+    st.rerun()
+st.caption("Memory is session-scoped and bounded by the application session. Reset starts a new customer conversation.")

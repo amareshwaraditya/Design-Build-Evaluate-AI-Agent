@@ -1,13 +1,15 @@
+import os
 import streamlit as st
-from src.llm_agent import llm_response
-from src.observability import traced_run
+from dotenv import load_dotenv
+from src.runtime import answer
 
-st.set_page_config(page_title="Phase 8 - Deployment and Monitoring")
-st.title("Phase 8 — Deployment & Monitoring")
-st.caption("Rubric: Deployment & Monitoring (10 pts)")
-message = st.text_input("Run monitored request", "Where is order ORD-10001?")
-run = traced_run(llm_response, message)
-st.json(run)
-st.markdown("### Deployment assumptions")
-st.markdown("- Streamlit Community Cloud runs app.py from the GitHub repository.\n- Credentials are configured as deployment secrets.\n- Evidence mode remains available when live services fail.\n- Logs contain sanitized identifiers rather than raw email, phone, card, or order data.")
-st.metric("Observed latency (ms)", run["latency_ms"])
+load_dotenv()
+st.title("Live Customer Support Service")
+st.write("This page exercises the same request path used by a deployed customer-facing service.")
+mode = os.getenv("AGENT_MODE", "evidence")
+st.write({"mode": mode, "model_configured": bool(os.getenv("OPENAI_API_KEY")), "langsmith_configured": bool(os.getenv("LANGCHAIN_API_KEY"))})
+message = st.text_area("Customer message", "Where is my order ORD-10001?")
+if st.button("Send monitored request"):
+    output = answer(message)
+    st.json(output)
+st.caption("The response includes latency and a sanitized log message. Raw customer identifiers are not intended for logs.")

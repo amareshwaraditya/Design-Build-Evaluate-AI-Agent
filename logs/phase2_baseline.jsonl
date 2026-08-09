@@ -1,0 +1,5 @@
+{"timestamp": "2026-08-09T07:38:39.515092+00:00", "intent": "return_refund", "user_hash": "3b54d90d68", "turn_number": 1}
+{"timestamp": "2026-08-09T07:38:39.516090+00:00", "intent": "unknown", "user_hash": "6682a43657", "turn_number": 2}
+{"timestamp": "2026-08-09T07:38:39.517098+00:00", "intent": "shipping", "user_hash": "b0af905e3e", "turn_number": 3}
+{"timestamp": "2026-08-09T07:38:39.518098+00:00", "intent": "return_refund", "user_hash": "ac2a304db8", "turn_number": 4}
+{"timestamp": "2026-08-09T07:42:37.057715+00:00", "intent": "return_refund", "user_hash": "fc1b61c1c1", "turn_number": 1}

@@ -1,39 +1,21 @@
-# Customer Support AI Resolution Agent
+# Athena — Tech Gadgets Inc. Smart Customer Service Agent
 
-Scenario 3 — Customer Support Resolution Agent. This repository presents the agent as an engineering evolution: problem framing, Python baseline, LLM integration, RAG, MCP tools, planning and memory, adaptive behaviour, deployment monitoring, and LangSmith evaluation.
+Athena is a smart, helpful, kind, and just personified AI chatbot working as a customer-service agent for Tech Gadgets Inc.
 
-## Run locally
+This repository demonstrates Athena’s evolution from a basic rule-based chatbot into a production-oriented customer-support architecture. Each phase adds a capability because Athena’s previous architecture exposed a specific failure.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-streamlit run app.py
-```
+## Athena’s evolution
 
-The application starts in deterministic evidence mode. Configure secrets only when live LLM, MCP, or LangSmith demonstrations are required.
+1. Athena understands the customer-support problem.
+2. Athena provides basic rule/template support.
+3. Athena gains LLM reasoning and prompt design.
+4. Athena uses Tech Gadgets Inc. policies and knowledge through retrieval.
+5. Athena uses controlled support tools.
+6. Athena gains planning, memory, and conversation context.
+7. Athena adapts from customer feedback.
+8. Athena runs as a monitored service.
+9. Athena is evaluated for quality, safety, governance, and production readiness.
 
-## Repository design
+Run locally with `streamlit run app.py`. Configure local credentials using `.env.example`; never commit the real `.env` file.
 
-- `src/` contains reusable agent components.
-- `streamlit_app/pages/` contains the evaluator-facing nine-page walkthrough.
-- `docs/` contains problem framing, demo flow, and evaluation design.
-- `knowledge_base/` contains support policies used by retrieval.
-- `evaluation/` contains the repeatable evaluation dataset.
-
-## Deployment
-
-Deploy `app.py` from this GitHub repository using Streamlit Community Cloud. Add secrets through the deployment settings, not source control:
-
-```toml
-OPENAI_API_KEY = "..."
-LANGCHAIN_API_KEY = "..."
-LANGCHAIN_TRACING_V2 = "true"
-LANGCHAIN_PROJECT = "customer-support-resolution-agent"
-```
-
-The deployed application remains usable in evidence mode if live credentials are unavailable.
-
-## Safety scope
-
-The agent provides support information and decision support only. It refuses unsafe requests, does not fabricate policies or customer data, escalates sensitive or unresolved issues, and sanitizes logs before persistence. State-changing support actions require confirmation or remain disabled in demonstration mode.
+Athena can explain verified Tech Gadgets Inc. support information and recommend safe next steps. She does not fabricate policies or customer data, expose sensitive information, or execute uncontrolled state-changing actions.

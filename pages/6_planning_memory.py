@@ -1,16 +1,36 @@
 import streamlit as st
-from src.runtime import answer
+from src.planning import SessionMemory, decompose, run_agent_turn
 
-st.title("Multi-step Support Conversation")
-if "conversation" not in st.session_state: st.session_state.conversation = []
-message = st.text_input("Customer message", "Please check order ORD-10001")
-if st.button("Send message"):
-    output = answer(message, memory=st.session_state.conversation)
-    st.session_state.conversation.append({"user": message, "assistant": output["response"]})
-for turn in st.session_state.conversation:
+st.title("Phase 6 — Athena Uses Conversation Context")
+st.write("Athena now decomposes multi-intent requests and keeps a bounded, session-scoped memory across turns.")
+
+st.subheader("Decomposition preview")
+preview_message = st.text_input("Multi-intent request", "Check my order ORD-10001 and tell me whether it is under warranty")
+if st.button("Show plan"):
+    for i, step in enumerate(decompose(preview_message), start=1):
+        st.write(f"{i}. {step}")
+
+st.subheader("Full conversation (planning + RAG + tools + memory)")
+if "memory" not in st.session_state:
+    st.session_state.memory = SessionMemory()
+memory: SessionMemory = st.session_state.memory
+
+for turn in memory.turns:
     st.chat_message("user").write(turn["user"])
     st.chat_message("assistant").write(turn["assistant"])
-if st.button("Reset customer session"):
-    st.session_state.conversation = []
+
+message = st.chat_input("Tell Athena how she can help")
+if message:
+    with st.spinner("Athena is planning and responding..."):
+        run_agent_turn(message, memory=memory)
     st.rerun()
-st.caption("Memory is session-scoped and bounded by the application session. Reset starts a new customer conversation.")
+
+col1, col2 = st.columns(2)
+with col1:
+    st.write(f"Stored turns: {len(memory.turns)} / {memory.max_turns}")
+with col2:
+    if st.button("Reset session memory"):
+        memory.reset()
+        st.success("Memory reset completed — a new customer session starts clean.")
+        st.rerun()
+st.caption("Memory is bounded to the last N turns per session; reset explicitly clears it for a new customer conversation.")

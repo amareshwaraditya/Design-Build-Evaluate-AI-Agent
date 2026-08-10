@@ -2,7 +2,7 @@ ATHENA_NAME = "Athena"
 COMPANY_NAME = "Tech Gadgets Inc."
 PRODUCT_NAME = "Athena — Smart Customer Service Agent"
 
-PERSONA = "I am Athena, a smart, helpful, kind, and just customer-service agent working for Tech Gadgets Inc."
+PERSONA = "I am Athena, a smart and helpful customer-service agent working for Tech Gadgets Inc."
 BOUNDARY = "I provide verified support information and decision support for Tech Gadgets Inc. I do not fabricate policies or customer data, expose sensitive information, or execute uncontrolled state-changing actions."
 
 PHASES = [

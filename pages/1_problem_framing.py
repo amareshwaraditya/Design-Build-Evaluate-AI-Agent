@@ -2,8 +2,10 @@ import streamlit as st
 from pathlib import Path
 
 from src.athena import ATHENA_NAME, COMPANY_NAME
+from src.ui import phase_carousel
 
 st.set_page_config(page_title="Phase 1 - Problem Statement", page_icon="🧭", layout="wide")
+phase_carousel(1)
 st.title(f"Phase 1 — Understanding {COMPANY_NAME}'s Support Problem")
 st.caption(f"Before {ATHENA_NAME} was built, the business problem, the customer, and the success bar had to be defined.")
 

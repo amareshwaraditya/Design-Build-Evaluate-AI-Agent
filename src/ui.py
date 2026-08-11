@@ -49,6 +49,17 @@ def phase_carousel(current: int) -> None:
 
 def chat_header(phase_note: str) -> None:
     """The consistent, customer-facing welcome shown at the top of every chat phase."""
+    st.markdown(
+        """<style>
+        [data-testid="chatAvatarIcon-assistant"],
+        .stChatMessage [data-testid="chatAvatarIcon-assistant"],
+        .stChatMessage:has([data-testid="assistant"]) [data-testid="stChatMessageAvatarCustom"],
+        .stChatMessage [data-testid="stChatMessageAvatarAssistant"] {
+            background-color: #16a34a !important;
+        }
+        </style>""",
+        unsafe_allow_html=True,
+    )
     st.title("Tech Gadgets Inc. – Smart Customer Service")
     st.write(
         "Hi! I am Athena, AI support assistant for Tech Gadgets Inc. "

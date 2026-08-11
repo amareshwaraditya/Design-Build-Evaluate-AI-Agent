@@ -5,3 +5,8 @@ __pycache__/
 .streamlit/secrets.toml
 .pytest_cache/
 Capstone_Project_*.zip
+logs/phase2_baseline.log
+logs/phase2_baseline.jsonl
+streamlit-error.log
+logs/phase2_baseline.jsonl
+logs/phase2_baseline.log

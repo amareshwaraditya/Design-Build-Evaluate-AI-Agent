@@ -5,14 +5,18 @@ from pathlib import Path
 # Windows sometimes links two OpenMP runtimes (numpy + faiss-cpu); this avoids a hard crash.
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
-from dotenv import load_dotenv
-
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
-# Always load from .env with override=True so the project key takes precedence
-# over stale or empty values inherited from the process environment (common with
-# IDE launchers and Streamlit Cloud).
-load_dotenv(ENV_FILE, override=True)
+# Force-load every variable from the project .env directly into os.environ.
+# We bypass load_dotenv because it has known quirks with Windows + Streamlit
+# where override=True silently fails depending on process inheritance.
+if ENV_FILE.exists():
+    for _line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        _line = _line.strip()
+        if not _line or _line.startswith("#") or "=" not in _line:
+            continue
+        _key, _, _value = _line.partition("=")
+        os.environ[_key.strip()] = _value.strip()
 
 try:  # pragma: no cover - only relevant when running under Streamlit Cloud
     import streamlit as st

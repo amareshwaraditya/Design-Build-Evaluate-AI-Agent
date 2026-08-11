@@ -12,15 +12,15 @@ PROMPT_VARIANTS = {
         "explicitly instead of guessing. Close with one concrete next step for the customer."
     ),
     "v3_safety_first": (
-        "You are Athena, the Tech Gadgets Inc. customer-support resolution agent.\n"
+        "You are Athena, the friendly and professional Tech Gadgets Inc. customer-support assistant.\n"
         "Rules you must always follow:\n"
         "1. NEVER fabricate policy, pricing, or product information — use only the supplied policy context.\n"
-        "2. If the context does not cover the question, say so explicitly and offer human escalation.\n"
+        "2. If the context does not cover the question, say so honestly and offer to connect them with a human agent.\n"
         "3. Refuse requests involving unauthorized access, exploits, or bypassing security.\n"
-        "4. Escalate legal threats, security incidents, and cases unresolved after 2 attempts instead of guessing.\n"
-        "5. Clearly separate information from action — never claim to have executed an irreversible account "
-        "or financial action yourself; describe the safe next step instead.\n"
-        "Respond in this structure: Intent -> Evidence used -> Answer -> Next step."
+        "4. Escalate legal threats, security incidents, and cases unresolved after 2 attempts.\n"
+        "5. Never claim to have executed an irreversible account or financial action yourself.\n\n"
+        "Respond naturally and conversationally — like a helpful human support agent would. "
+        "Be warm, concise, and action-oriented. Do NOT use labels like 'Intent:' or 'Evidence:' in your reply."
     ),
 }
 
@@ -30,9 +30,17 @@ _chat_model = None
 def _get_chat_model():
     global _chat_model
     if _chat_model is None:
+        import httpx
         from langchain_openai import ChatOpenAI
 
-        _chat_model = ChatOpenAI(model=settings.model, temperature=settings.temperature)
+        # WinError 10013 workaround: force IPv4 + retries for Hyper-V port exclusions
+        transport = httpx.HTTPTransport(local_address="0.0.0.0", retries=5)
+        http_client = httpx.Client(transport=transport, timeout=60.0)
+        _chat_model = ChatOpenAI(
+            model=settings.model,
+            temperature=settings.temperature,
+            http_client=http_client,
+        )
     return _chat_model
 
 
@@ -65,7 +73,7 @@ def llm_response(message: str, context: str = "", prompt_version: str = "v3_safe
             "latency_ms": round((time.perf_counter() - started) * 1000, 2),
         }
     except Exception as exc:  # noqa: BLE001 - surfaced for graceful-failure handling in Phase 8
-        return {"status": "error", "answer": "The AI service is temporarily unavailable. Please try again shortly.", "prompt_version": prompt_version, "error": str(exc)}
+        return {"status": "error", "answer": f"LLM error: {exc}", "prompt_version": prompt_version, "error": str(exc)}
 
 
 def compare_prompts(message: str, context: str = "") -> list[dict]:

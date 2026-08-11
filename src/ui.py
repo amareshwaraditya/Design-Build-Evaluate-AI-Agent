@@ -5,27 +5,27 @@ an immediately usable chat) and the phase-to-phase navigation are consistent eve
 """
 import streamlit as st
 
-# (phase number, short label for the carousel, page path as registered in app.py's st.Page list)
+# (phase number, carousel title, page path as registered in app.py's st.Page list)
 PHASES = [
-    (1, "Problem framing", "pages/1_problem_framing.py"),
-    (2, "Basic support", "pages/2_baseline.py"),
-    (3, "LLM reasoning", "pages/3_llm_integration.py"),
-    (4, "Company knowledge", "pages/4_rag.py"),
-    (5, "Support tools", "pages/5_mcp_tools.py"),
-    (6, "Conversation context", "pages/6_planning_memory.py"),
-    (7, "Feedback learning", "pages/7_adaptation.py"),
-    (8, "Monitored service", "pages/8_deployment_monitoring.py"),
-    (9, "Production review", "pages/9_evaluation_governance.py"),
+    (1, "Phase 1 — Understanding Tech Gadgets Inc.'s Support Problem", "pages/1_problem_framing.py"),
+    (2, "Phase 2 — Athena's Basic Support", "pages/2_baseline.py"),
+    (3, "Phase 3 — Athena Gains LLM Reasoning", "pages/3_llm_integration.py"),
+    (4, "Phase 4 — Athena Uses Company Knowledge", "pages/4_rag.py"),
+    (5, "Phase 5 — Athena Uses Support Tools", "pages/5_mcp_tools.py"),
+    (6, "Phase 6 — Athena Uses Conversation Context", "pages/6_planning_memory.py"),
+    (7, "Phase 7 — Athena Learns from Feedback", "pages/7_adaptation.py"),
+    (8, "Phase 8 — Athena Runs as a Service", "pages/8_deployment_monitoring.py"),
+    (9, "Phase 9 — Athena's Production Review", "pages/9_evaluation_governance.py"),
 ]
 
 
 def phase_carousel(current: int) -> None:
-    """A left/right carousel for moving between phases, plus a quick numeric jump strip."""
+    """A labelled, one-phase-at-a-time carousel with Previous/Next controls."""
     index = current - 1
     prev_item = PHASES[index - 1] if index > 0 else None
     next_item = PHASES[index + 1] if index < len(PHASES) - 1 else None
 
-    left, mid, right = st.columns([1, 5, 1], vertical_alignment="center")
+    left, mid, right = st.columns([1.2, 5, 1.2], vertical_alignment="center")
     with left:
         if st.button(
             "Previous", icon=":material/chevron_left:", width="stretch",
@@ -34,13 +34,8 @@ def phase_carousel(current: int) -> None:
         ):
             st.switch_page(prev_item[2])
     with mid:
-        labels = [str(number) for number, _, _ in PHASES]
-        selected = st.segmented_control(
-            "Jump to phase", labels, default=str(current),
-            key=f"phase_jump_{current}", label_visibility="collapsed",
-        )
-        if selected and selected != str(current):
-            st.switch_page(PHASES[int(selected) - 1][2])
+        with st.container(border=True):
+            st.markdown(f"**{PHASES[index][1]}**")
     with right:
         if st.button(
             "Next", icon=":material/chevron_right:", width="stretch",
@@ -48,7 +43,7 @@ def phase_carousel(current: int) -> None:
             help=f"Phase {next_item[0]} · {next_item[1]}" if next_item else None,
         ):
             st.switch_page(next_item[2])
-    st.caption(f"Phase {current} of {len(PHASES)} · {PHASES[index][1]}")
+    st.caption(f"Phase {current} of {len(PHASES)}")
     st.divider()
 
 

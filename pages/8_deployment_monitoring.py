@@ -3,7 +3,7 @@ import streamlit as st
 from src.config import settings
 from src.observability import traced_run
 from src.planning import run_agent_turn
-from src.ui import chat_header, phase_carousel, render_chat
+from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
 st.set_page_config(page_title="Athena - Monitored Service", page_icon="📡", layout="wide")
 phase_carousel(8)
@@ -27,9 +27,10 @@ def _reply(message: str) -> dict:
 
 
 def _evidence(result: dict) -> None:
-    st.caption(f"Latency: {result['latency_ms']} ms · sanitized log: `{result['logged_message']}`")
+    extra = [f"<b>Sanitized log:</b> <code>{result['logged_message']}</code>"]
     if result.get("error"):
-        st.warning(f"Live call degraded gracefully and fell back to deterministic logic: {result['error']}")
+        extra.append(f"<b>Degraded:</b> fell back to deterministic logic — {result['error']}")
+    evaluation_box(result, extra_lines=extra)
 
 
 render_chat(

@@ -1,6 +1,6 @@
 import streamlit as st
 from src.mcp_tools import TOOLS, call_tool, run_tool_agent
-from src.ui import chat_header, phase_carousel, render_chat
+from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
 st.set_page_config(page_title="Athena - Support Tools", page_icon="🛠️", layout="wide")
 phase_carousel(5)
@@ -9,11 +9,13 @@ chat_header("Phase 5 — Athena can now call real, scoped, read-only tools to re
 
 def _evidence(result: dict) -> None:
     trace = result.get("trace") or []
+    extra = []
     if trace:
         for call in trace:
-            st.caption(f"Tool called: `{call['tool']}({call['args']})` → `{call['result']}`")
+            extra.append(f"<b>Tool called:</b> <code>{call['tool']}({call['args']})</code> → <code>{call['result']}</code>")
     else:
-        st.caption("No tool call — Athena asked for missing information instead of guessing.")
+        extra.append("<b>Tool called:</b> none — Athena asked for missing information instead of guessing")
+    evaluation_box(result, extra_lines=extra)
 
 
 render_chat(

@@ -2,7 +2,7 @@ import json
 import streamlit as st
 from src.evaluation import run_evaluation
 from src.planning import run_agent_turn
-from src.ui import chat_header, phase_carousel, render_chat
+from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
 st.set_page_config(page_title="Athena - Production Review", page_icon="✅", layout="wide")
 phase_carousel(9)
@@ -10,7 +10,7 @@ chat_header("Phase 9 — this final version has been tested end-to-end for quali
 
 
 def _evidence(result: dict) -> None:
-    st.caption(f"Status: `{result['status']}`")
+    evaluation_box(result)
 
 
 render_chat(

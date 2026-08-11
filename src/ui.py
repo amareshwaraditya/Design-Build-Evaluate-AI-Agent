@@ -21,6 +21,26 @@ PHASES = [
 
 def phase_carousel(current: int) -> None:
     """A labelled, one-phase-at-a-time carousel with Previous/Next controls."""
+    st.markdown(
+        """<style>
+        section[data-testid="stSidebar"],
+        [data-testid="stSidebar"],
+        [data-testid="stSidebar"] > div {
+            background-color: #007cc3 !important;
+        }
+        section[data-testid="stSidebar"] *,
+        [data-testid="stSidebar"] * {
+            color: white !important;
+        }
+        section[data-testid="stSidebar"] img,
+        [data-testid="stSidebar"] img {
+            background-color: white;
+            border-radius: 0.25rem;
+            padding: 4px;
+        }
+        </style>""",
+        unsafe_allow_html=True,
+    )
     index = current - 1
     prev_item = PHASES[index - 1] if index > 0 else None
     next_item = PHASES[index + 1] if index < len(PHASES) - 1 else None
@@ -34,8 +54,10 @@ def phase_carousel(current: int) -> None:
         ):
             st.switch_page(prev_item[2])
     with mid:
-        with st.container(border=True):
-            st.markdown(f"**{PHASES[index][1]}**")
+        st.markdown(
+            f'<div style="background-color:#007cc3; border-radius:0.5rem; padding:0.45rem 1rem; text-align:center; color:white; line-height:1.6; height:38px; display:flex; align-items:center; justify-content:center;"><strong>{PHASES[index][1]}</strong></div>',
+            unsafe_allow_html=True,
+        )
     with right:
         if st.button(
             "Next", icon=":material/chevron_right:", width="stretch",
@@ -44,16 +66,48 @@ def phase_carousel(current: int) -> None:
         ):
             st.switch_page(next_item[2])
     st.caption(f"Phase {current} of {len(PHASES)}")
-    st.divider()
 
 
 def chat_header(phase_note: str) -> None:
     """The consistent, customer-facing welcome shown at the top of every chat phase."""
     st.markdown(
         """<style>
+        /* Carousel title bar */
+        .carousel-title {
+            background-color: #007cc3;
+            border-radius: 0.5rem;
+            padding: 0.6rem 1rem;
+            text-align: center;
+            margin: 0;
+            color: white;
+        }
+        .carousel-title strong {
+            color: white;
+        }
+        .carousel-title p {
+            margin: 0;
+            text-align: center;
+            color: white;
+        }
+        /* Reduce gap between carousel and main title */
+        [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlockBorderWrapper"]:first-child {
+            margin-bottom: -1rem;
+        }
+        /* Assistant avatar */
         [data-testid="stChatMessageAvatarAssistant"],
         [data-testid="stChatMessageAvatarCustom"] {
             background-color: #16a34a !important;
+        }
+        /* Chat input red border + button */
+        [data-testid="stChatInput"] {
+            border: 2px solid #e53e3e !important;
+            border-radius: 0.5rem;
+        }
+        [data-testid="stChatInputSubmitButton"] button,
+        [data-testid="stChatInput"] button {
+            background-color: #e53e3e !important;
+            color: white !important;
+            border-radius: 0.375rem;
         }
         </style>""",
         unsafe_allow_html=True,
@@ -64,6 +118,24 @@ def chat_header(phase_note: str) -> None:
         "How can I help you with your account or order today?"
     )
     st.caption(phase_note)
+
+
+def evaluation_box(result: dict, extra_lines: list[str] | None = None) -> None:
+    """Render a consistent colored evaluation metadata box below a chat response."""
+    status = result.get("status", "resolved")
+    color = {"resolved": "green", "refused": "red", "escalated": "orange", "error": "red", "degraded": "orange", "offline": "gray"}.get(status, "gray")
+    latency = result.get("latency_ms", "—")
+    variant = result.get("prompt_version", "—")
+    lines_html = f"<b>Prompt variant:</b> {variant} &nbsp;|&nbsp; <b>Status:</b> {status} &nbsp;|&nbsp; <b>Latency:</b> {latency} ms"
+    if extra_lines:
+        lines_html += "<br>" + "<br>".join(extra_lines)
+    st.markdown(
+        f"""<div style="background-color: #f0f2f6; border-left: 4px solid {color}; padding: 0.75rem 1rem; margin-top: 0.5rem; border-radius: 0.25rem; font-size: 0.85rem;">
+        <strong>Evaluation metadata</strong><br>
+        {lines_html}
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
 
 def render_chat(session_key: str, reply_fn, evidence_fn=None, placeholder=None, suggestions=None) -> None:

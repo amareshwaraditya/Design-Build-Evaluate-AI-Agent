@@ -1,7 +1,7 @@
 import streamlit as st
 from src.adaptation import FeedbackPolicy, before_after
 from src.planning import run_agent_turn
-from src.ui import chat_header, phase_carousel, render_chat
+from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
 st.set_page_config(page_title="Athena - Feedback Learning", page_icon="💬", layout="wide")
 phase_carousel(7)
@@ -19,7 +19,8 @@ if st.button("Submit rating", icon=":material/thumb_up:"):
 
 def _evidence(result: dict) -> None:
     applied = policy.instructions()
-    st.caption(f"Tone applied: `{applied['tone']}` (based on {applied['sample_size']} recent ratings, avg {applied['average']})")
+    extra = [f"<b>Tone applied:</b> {applied['tone']} (based on {applied['sample_size']} recent ratings, avg {applied['average']})"]
+    evaluation_box(result, extra_lines=extra)
 
 
 render_chat(

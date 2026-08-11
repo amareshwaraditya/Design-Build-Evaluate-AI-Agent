@@ -1,10 +1,16 @@
 import streamlit as st
 from src.llm_agent import PROMPT_VARIANTS, compare_prompts, llm_response
-from src.ui import chat_header, phase_carousel, render_chat
+from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
 st.set_page_config(page_title="Athena - LLM Reasoning", page_icon="🧠", layout="wide")
 phase_carousel(3)
 chat_header("Phase 3 — Athena now reasons with a real LLM (gpt-4o-mini) instead of fixed templates.")
+
+st.info(
+    "**Note:** Phase 3 tests LLM reasoning *without* company knowledge. "
+    "Athena cannot answer policy-specific questions here — that gap is exactly what Phase 4 (RAG) solves.",
+    icon=":material/info:",
+)
 
 variant = st.segmented_control(
     "Prompt variant", list(PROMPT_VARIANTS.keys()), default="v3_safety_first", key="phase3_variant"
@@ -12,7 +18,7 @@ variant = st.segmented_control(
 
 
 def _evidence(result: dict) -> None:
-    st.caption(f"Prompt variant: `{result.get('prompt_version')}` · status: `{result['status']}`")
+    evaluation_box(result)
 
 
 render_chat(

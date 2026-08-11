@@ -1,6 +1,6 @@
 import streamlit as st
 from src.planning import SessionMemory, decompose, run_agent_turn
-from src.ui import chat_header, phase_carousel, render_chat
+from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
 st.set_page_config(page_title="Athena - Conversation Context", page_icon="🧩", layout="wide")
 phase_carousel(6)
@@ -13,9 +13,11 @@ memory: SessionMemory = st.session_state.phase6_memory
 
 def _evidence(result: dict) -> None:
     sub_tasks = result.get("sub_tasks") or []
+    extra = []
     if len(sub_tasks) > 1:
-        st.caption("Decomposed into " + " · ".join(f"`{s}`" for s in sub_tasks))
-    st.caption(f"Memory: {len(memory.turns)} / {memory.max_turns} turns retained this session")
+        extra.append("<b>Decomposed into:</b> " + " · ".join(f"<code>{s}</code>" for s in sub_tasks))
+    extra.append(f"<b>Memory:</b> {len(memory.turns)} / {memory.max_turns} turns retained this session")
+    evaluation_box(result, extra_lines=extra)
 
 
 render_chat(

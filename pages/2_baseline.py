@@ -1,7 +1,7 @@
 import streamlit as st
 
 from src.phase2_chatbot import BaselineChatbot, limitation_tests
-from src.ui import chat_header, phase_carousel
+from src.ui import chat_header, evaluation_box, phase_carousel
 
 st.set_page_config(page_title="Athena - Basic Support", page_icon="💬", layout="wide")
 phase_carousel(2)
@@ -16,7 +16,10 @@ for turn in bot.turns:
         st.write(turn.user)
     with st.chat_message("assistant", avatar=":material/support_agent:"):
         st.write(turn.assistant)
-        st.caption(f"Classified intent: `{turn.intent}`")
+        evaluation_box(
+            {"status": "resolved", "prompt_version": "keyword-rules"},
+            extra_lines=[f"<b>Classified intent:</b> <code>{turn.intent}</code>"],
+        )
 
 message = st.chat_input("Ask about a return, refund, delivery, warranty, password, or cancellation")
 if message:

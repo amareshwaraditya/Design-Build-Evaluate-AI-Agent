@@ -1,7 +1,7 @@
 import streamlit as st
 from src.llm_agent import llm_response
 from src.rag import load_policy_documents, retrieve
-from src.ui import chat_header, phase_carousel, render_chat
+from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
 st.set_page_config(page_title="Athena - Company Knowledge", page_icon="📚", layout="wide")
 phase_carousel(4)
@@ -21,14 +21,13 @@ def _reply(message: str) -> dict:
 
 def _evidence(result: dict) -> None:
     sources = result.get("sources") or []
+    source_names = ", ".join(sorted({p["source"] for p in sources})) if sources else "none"
+    evaluation_box(result, extra_lines=[f"<b>Retrieved from:</b> {source_names}"])
     if sources:
-        st.caption("Retrieved from: " + ", ".join(sorted({p["source"] for p in sources})))
         with st.expander("Show retrieved passages"):
             for p in sources:
                 st.markdown(f"**{p['source']}**")
                 st.write(p["text"])
-    else:
-        st.caption("No relevant policy passage retrieved — Athena said so instead of guessing.")
 
 
 render_chat(

@@ -1,12 +1,18 @@
 from dataclasses import dataclass
 import os
+from pathlib import Path
 
 # Windows sometimes links two OpenMP runtimes (numpy + faiss-cpu); this avoids a hard crash.
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
 from dotenv import load_dotenv
 
-load_dotenv()
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+# Always load from .env with override=True so the project key takes precedence
+# over stale or empty values inherited from the process environment (common with
+# IDE launchers and Streamlit Cloud).
+load_dotenv(ENV_FILE, override=True)
 
 try:  # pragma: no cover - only relevant when running under Streamlit Cloud
     import streamlit as st
@@ -27,6 +33,7 @@ class Settings:
 
     @property
     def has_api_key(self) -> bool:
-        return bool(os.getenv("OPENAI_API_KEY"))
+        key = os.getenv("OPENAI_API_KEY", "")
+        return bool(key.strip())
 
 settings = Settings()

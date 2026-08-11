@@ -16,7 +16,11 @@ if ENV_FILE.exists():
         if not _line or _line.startswith("#") or "=" not in _line:
             continue
         _key, _, _value = _line.partition("=")
-        os.environ[_key.strip()] = _value.strip()
+        _value = _value.strip()
+        # Strip surrounding quotes (single or double) that .env files commonly use
+        if len(_value) >= 2 and _value[0] == _value[-1] and _value[0] in ('"', "'"):
+            _value = _value[1:-1]
+        os.environ[_key.strip()] = _value
 
 try:  # pragma: no cover - only relevant when running under Streamlit Cloud
     import streamlit as st

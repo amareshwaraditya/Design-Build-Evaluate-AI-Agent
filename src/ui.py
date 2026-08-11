@@ -51,10 +51,8 @@ def chat_header(phase_note: str) -> None:
     """The consistent, customer-facing welcome shown at the top of every chat phase."""
     st.markdown(
         """<style>
-        [data-testid="chatAvatarIcon-assistant"],
-        .stChatMessage [data-testid="chatAvatarIcon-assistant"],
-        .stChatMessage:has([data-testid="assistant"]) [data-testid="stChatMessageAvatarCustom"],
-        .stChatMessage [data-testid="stChatMessageAvatarAssistant"] {
+        [data-testid="stChatMessageAvatarAssistant"],
+        [data-testid="stChatMessageAvatarCustom"] {
             background-color: #16a34a !important;
         }
         </style>""",

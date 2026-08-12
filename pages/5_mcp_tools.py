@@ -68,11 +68,14 @@ with st.expander("Technical evidence: available tools & safeguards"):
         '<div style="border: 2px solid #16a34a; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0;">',
         unsafe_allow_html=True,
     )
-    if selected in ("lookup_order", "check_warranty"):
-        st.json(call_tool(selected, {"order_id": order_id}))
-    else:
-        reason = st.text_input("Escalation reason", "Customer reports an unresolved sensitive issue")
-        st.json(call_tool(selected, {"reason": reason}))
+    try:
+        if selected in ("lookup_order", "check_warranty"):
+            st.json(call_tool(selected, {"order_id": order_id}))
+        else:
+            reason = st.text_input("Escalation reason", "Customer reports an unresolved sensitive issue")
+            st.json(call_tool(selected, {"reason": reason}))
+    except Exception as exc:
+        st.error(f"Tool execution failed: {type(exc).__name__}: {exc}")
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown(
         "- Tools are read-only; no order can be modified or refunded automatically.\n"

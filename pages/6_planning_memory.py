@@ -72,9 +72,12 @@ with st.expander("Technical evidence: decomposition preview & memory bounds"):
             '<div style="border: 2px solid #16a34a; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0;">',
             unsafe_allow_html=True,
         )
-        steps = decompose(preview_message)
-        for i, step in enumerate(steps, start=1):
-            st.write(f"{i}. {step}")
-        st.caption(f"Decomposed into {len(steps)} sub-task(s)")
+        try:
+            steps = decompose(preview_message)
+            for i, step in enumerate(steps, start=1):
+                st.write(f"{i}. {step}")
+            st.caption(f"Decomposed into {len(steps)} sub-task(s)")
+        except Exception as exc:
+            st.error(f"Decomposition failed: {type(exc).__name__}: {exc}")
         st.markdown("</div>", unsafe_allow_html=True)
     st.caption("Memory is bounded to the last N turns per session; reset explicitly clears it for a new customer conversation.")

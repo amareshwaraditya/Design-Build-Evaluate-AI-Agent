@@ -7,7 +7,11 @@ st.set_page_config(page_title="Athena - Company Knowledge", page_icon="📚", la
 phase_carousel(4)
 chat_header("Phase 4 — Athena now grounds answers in Tech Gadgets Inc. policy via FAISS + OpenAI embeddings.")
 
-docs = load_policy_documents()
+try:
+    docs = load_policy_documents()
+except Exception as e:
+    docs = []
+    st.error(f"Failed to load knowledge base: {e}")
 st.caption(f"{len(docs)} knowledge-base documents indexed (`knowledge_base/*.md`).")
 
 

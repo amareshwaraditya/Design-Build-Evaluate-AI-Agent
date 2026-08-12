@@ -95,7 +95,13 @@ with st.expander("Technical evidence: feedback policy & before/after comparison"
     st.markdown("**Tone adaptation demo** — same question, two contrasting tones:")
     demo_message = st.text_input("Comparison message", "My earbuds broke after 2 weeks")
     if st.button("Run before/after comparison"):
-        result = before_after(demo_message, policy)
+        try:
+            result = before_after(demo_message, policy)
+        except Exception as exc:
+            st.error(f"Comparison failed: {type(exc).__name__}: {exc}")
+            result = None
+        if result is None:
+            st.stop()
         st.markdown(
             f"""<div style="background-color: #f0f2f6; border-left: 4px solid #007cc3; border-radius: 0.25rem; padding: 0.75rem 1rem; margin: 0.5rem 0;">
             <strong>Professional + concise tone:</strong><br>{result["before"]}

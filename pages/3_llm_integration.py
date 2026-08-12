@@ -68,7 +68,13 @@ with st.expander("Technical evidence: prompt variants & required comparison"):
     st.markdown("**Required prompt comparison (same test set, 3 variants, real output)**")
     compare_message = st.text_input("Comparison test message", "What happens if my warranty just expired yesterday?")
     if st.button("Run prompt comparison"):
-        results = compare_prompts(compare_message)
+        try:
+            results = compare_prompts(compare_message)
+        except Exception as exc:
+            st.error(f"Prompt comparison failed: {type(exc).__name__}: {exc}")
+            results = None
+        if results is None:
+            st.stop()
         st.markdown(
             '<div style="border: 2px solid #16a34a; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0;">',
             unsafe_allow_html=True,

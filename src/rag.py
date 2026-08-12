@@ -1,4 +1,9 @@
-"""Phase 4 — Embeddings & semantic retrieval: real OpenAI embeddings in a FAISS vector store."""
+"""Phase 4 — Embeddings & semantic retrieval: real OpenAI embeddings in a FAISS vector store.
+
+Provides semantic search over the Tech Gadgets Inc. knowledge base. Falls back to
+keyword-overlap search when the OpenAI embedding API is unavailable.
+"""
+
 from pathlib import Path
 
 from .config import settings
@@ -7,7 +12,19 @@ _INDEX_CACHE: dict[str, object] = {}
 
 
 def load_policy_documents(root: str = "knowledge_base") -> list[dict]:
-    return [{"source": path.name, "text": path.read_text(encoding="utf-8")} for path in sorted(Path(root).glob("*.md"))]
+    """Load all markdown policy documents from the knowledge base directory.
+
+    Args:
+        root: Path to the knowledge base directory.
+
+    Returns:
+        List of dicts with 'source' (filename) and 'text' (content).
+        Returns empty list if directory does not exist.
+    """
+    root_path = Path(root)
+    if not root_path.exists():
+        return []
+    return [{"source": path.name, "text": path.read_text(encoding="utf-8")} for path in sorted(root_path.glob("*.md"))]
 
 
 def _build_index(root: str):

@@ -1,4 +1,11 @@
-"""Phase 6 — Planning, memory & context: multi-intent decomposition plus a bounded conversation buffer."""
+"""Phase 6 — Planning, memory & context: multi-intent decomposition plus a bounded conversation buffer.
+
+Provides:
+- decompose(): LLM-powered (or heuristic) multi-intent splitting.
+- SessionMemory: rolling-window conversation buffer.
+- run_agent_turn(): full pipeline orchestrator (safety → decompose → RAG → tools → memory).
+"""
+
 from .config import settings
 from .rag import retrieve
 from .safety import safety_precheck
@@ -61,14 +68,28 @@ class SessionMemory:
 
 
 def run_agent_turn(message: str, memory: "SessionMemory | None" = None, feedback: dict | None = None) -> dict:
-    """The full pipeline: safety -> decomposition -> per-intent RAG + tool-calling answer -> memory update."""
+    """The full pipeline: safety → decomposition → per-intent RAG + tool-calling answer → memory update.
+
+    Each sub-task is handled independently — if one fails, others still complete.
+    Safety pre-check runs first and short-circuits on unsafe/PII/escalation triggers.
+
+    Args:
+        message: The customer's input message.
+        memory: Optional SessionMemory instance for conversation context.
+        feedback: Optional dict with tone/verbosity instructions from FeedbackPolicy.
+
+    Returns:
+        Dict with keys: status, answer, sub_tasks, and optionally details.
+    """
     from .mcp_tools import run_tool_agent
 
     check = safety_precheck(message)
     if check["status"] != "allow":
-        outcome = {"refuse": ("refused", "I cannot help with unsafe access or harmful activity."),
-                   "escalate": ("escalated", "This case has been identified as high risk and should be reviewed by a human support specialist."),
-                   "protect": ("protected", "Please do not share payment-card details. I can continue without them.")}[check["status"]]
+        outcome = {
+            "refuse": ("refused", "I cannot help with unsafe access or harmful activity."),
+            "escalate": ("escalated", "This case has been identified as high risk and should be reviewed by a human support specialist."),
+            "protect": ("protected", "Please do not share payment-card details. I can continue without them."),
+        }[check["status"]]
         status, answer = outcome
         if memory is not None:
             memory.add(message, answer)
@@ -77,16 +98,26 @@ def run_agent_turn(message: str, memory: "SessionMemory | None" = None, feedback
     sub_tasks = decompose(message)
     answers = []
     for sub_task in sub_tasks:
-        passages = retrieve(sub_task, top_k=2)
-        context = "\n\n".join(f"[{p['source']}] {p['text']}" for p in passages)
-        response = run_tool_agent(sub_task, context=context, feedback=feedback)
-        answers.append({
-            "sub_task": sub_task,
-            "status": response["status"],
-            "answer": response["answer"],
-            "sources": [p["source"] for p in passages],
-            "tool_trace": response.get("trace", []),
-        })
+        try:
+            passages = retrieve(sub_task, top_k=2)
+            context = "\n\n".join(f"[{p['source']}] {p['text']}" for p in passages)
+            response = run_tool_agent(sub_task, context=context, feedback=feedback)
+            answers.append({
+                "sub_task": sub_task,
+                "status": response["status"],
+                "answer": response["answer"],
+                "sources": [p["source"] for p in passages],
+                "tool_trace": response.get("trace", []),
+            })
+        except Exception as exc:  # noqa: BLE001
+            # Per-subtask graceful degradation: record the failure without aborting the full turn
+            answers.append({
+                "sub_task": sub_task,
+                "status": "error",
+                "answer": f"I encountered an issue processing this part of your request. ({type(exc).__name__})",
+                "sources": [],
+                "tool_trace": [],
+            })
 
     combined = "\n\n".join(f"- {a['answer']}" for a in answers)
     if memory is not None:

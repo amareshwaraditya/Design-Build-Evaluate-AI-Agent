@@ -49,7 +49,7 @@ def _build_tools():
     }
 
 
-def run_tool_agent(message: str, context: str = "") -> dict:
+def run_tool_agent(message: str, context: str = "", feedback: dict | None = None) -> dict:
     """Let a real LLM choose and call tools, bounded by max_tool_iterations to prevent loops."""
     if not settings.has_api_key:
         return {"status": "offline", "trace": [], "answer": "LLM is not configured (missing OPENAI_API_KEY)."}
@@ -58,12 +58,32 @@ def run_tool_agent(message: str, context: str = "") -> dict:
 
     tools, by_name = _build_tools()
     model = ChatOpenAI(model=settings.model, temperature=0).bind_tools(tools)
+
+    # Build tone instruction based on feedback
+    tone_instruction = ""
+    if feedback:
+        tone = feedback.get("tone", "professional")
+        verbosity = feedback.get("verbosity", "normal")
+        if tone == "empathetic":
+            tone_instruction = (
+                "\n\nTONE INSTRUCTION: The customer has expressed dissatisfaction. Respond with extra empathy "
+                "and understanding. Acknowledge their frustration explicitly. Be warm, apologetic, and thorough "
+                "in your explanation. Use phrases like 'I completely understand your frustration', "
+                "'I sincerely apologize for the inconvenience', 'Let me make this right for you'."
+            )
+        elif verbosity == "concise":
+            tone_instruction = (
+                "\n\nTONE INSTRUCTION: The customer is satisfied and prefers efficiency. "
+                "Keep your response brief and to-the-point. No unnecessary pleasantries — just the facts and next steps."
+            )
+
     system = (
         "You are Athena, a Tech Gadgets Inc. support agent with read-only tools: lookup_order, check_warranty, "
         "and escalate_to_human. Call a tool only when the customer supplies information the tool needs "
         "(such as an order ID). Never invent an order ID or policy detail. If no order ID is given, ask for "
         "one instead of calling a tool. Ground policy answers only in the context below; if it does not "
         "answer the question, say so explicitly.\n\nPolicy context:\n" + (context or "(no relevant policy passage retrieved)")
+        + tone_instruction
     )
     messages: list = [("system", system), ("human", message)]
     trace = []

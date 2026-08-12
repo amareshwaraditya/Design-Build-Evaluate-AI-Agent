@@ -11,13 +11,39 @@ if "phase6_memory" not in st.session_state:
 memory: SessionMemory = st.session_state.phase6_memory
 
 
-def _evidence(result: dict) -> None:
+def _phase6_insights(result: dict) -> list[str]:
+    """Generate success/limitation notes for Phase 6 evaluation box."""
     sub_tasks = result.get("sub_tasks") or []
     extra = []
+    status = result.get("status", "resolved")
+
+    # Decomposition details
     if len(sub_tasks) > 1:
         extra.append("<b>Decomposed into:</b> " + " · ".join(f"<code>{s}</code>" for s in sub_tasks))
+        extra.append(f"<b>✓ Success:</b> Multi-intent request decomposed into {len(sub_tasks)} sub-tasks and each resolved")
+    elif len(sub_tasks) == 1:
+        extra.append("<b>✓ Success:</b> Single-intent correctly identified — no unnecessary decomposition")
+    elif status == "refused":
+        extra.append("<b>✓ Success:</b> Unsafe request blocked before planning stage")
+
+    # Memory status
     extra.append(f"<b>Memory:</b> {len(memory.turns)} / {memory.max_turns} turns retained this session")
-    evaluation_box(result, extra_lines=extra)
+    if len(memory.turns) > 1:
+        extra.append("<b>✓ Context:</b> Previous conversation context available for follow-up understanding")
+
+    # Phase 6 limitations
+    limitations = []
+    if status == "resolved":
+        limitations.append("No tone adaptation — responds identically regardless of customer frustration level (→ Phase 7 Feedback)")
+        limitations.append("No latency/PII monitoring — unobserved in production (→ Phase 8 Observability)")
+
+    if limitations:
+        extra.append("<b>Phase 6 gaps:</b> " + "; ".join(limitations))
+    return extra
+
+
+def _evidence(result: dict) -> None:
+    evaluation_box(result, extra_lines=_phase6_insights(result))
 
 
 render_chat(
@@ -42,6 +68,13 @@ if st.button("Reset session memory", icon=":material/restart_alt:"):
 with st.expander("Technical evidence: decomposition preview & memory bounds"):
     preview_message = st.text_input("Multi-intent request", "Check my order ORD-10001 and tell me whether it is under warranty")
     if st.button("Show plan"):
-        for i, step in enumerate(decompose(preview_message), start=1):
+        st.markdown(
+            '<div style="border: 2px solid #16a34a; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0;">',
+            unsafe_allow_html=True,
+        )
+        steps = decompose(preview_message)
+        for i, step in enumerate(steps, start=1):
             st.write(f"{i}. {step}")
+        st.caption(f"Decomposed into {len(steps)} sub-task(s)")
+        st.markdown("</div>", unsafe_allow_html=True)
     st.caption("Memory is bounded to the last N turns per session; reset explicitly clears it for a new customer conversation.")

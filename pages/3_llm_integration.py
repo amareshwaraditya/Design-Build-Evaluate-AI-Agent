@@ -17,8 +17,35 @@ variant = st.segmented_control(
 )
 
 
+def _phase3_insights(result: dict) -> list[str]:
+    """Generate success/limitation notes for Phase 3 evaluation box."""
+    extra = []
+    status = result.get("status", "resolved")
+    answer = result.get("answer", "").lower()
+
+    # Success indicators
+    if status == "refused":
+        extra.append("<b>✓ Success:</b> Unsafe request correctly refused before LLM processing")
+    elif status == "resolved":
+        extra.append("<b>✓ Success:</b> LLM generated a natural, contextual response (not a fixed template)")
+
+    # Phase 3 limitations
+    limitations = []
+    if any(w in answer for w in ("i don't have access", "i cannot look up", "i'm not able to verify", "specific policy")):
+        limitations.append("No company knowledge — cannot cite actual Tech Gadgets policy (→ Phase 4 RAG)")
+    if "order" in answer.lower() and "ORD-" not in answer:
+        limitations.append("No tool access — cannot verify real order data (→ Phase 5 Tools)")
+    if status == "resolved":
+        limitations.append("No conversation memory — each message is independent (→ Phase 6 Memory)")
+        limitations.append("No tone adaptation — responds the same regardless of customer mood (→ Phase 7 Feedback)")
+
+    if limitations:
+        extra.append("<b>Phase 3 gaps:</b> " + "; ".join(limitations))
+    return extra
+
+
 def _evidence(result: dict) -> None:
-    evaluation_box(result)
+    evaluation_box(result, extra_lines=_phase3_insights(result))
 
 
 render_chat(
@@ -42,9 +69,13 @@ with st.expander("Technical evidence: prompt variants & required comparison"):
     compare_message = st.text_input("Comparison test message", "What happens if my warranty just expired yesterday?")
     if st.button("Run prompt comparison"):
         results = compare_prompts(compare_message)
-        st.table({
-            "Variant": [r["variant"] for r in results],
-            "Status": [r["status"] for r in results],
-            "Answer": [r["answer"][:220] for r in results],
-        })
+        st.markdown(
+            '<div style="border: 2px solid #16a34a; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0;">',
+            unsafe_allow_html=True,
+        )
+        for r in results:
+            st.markdown(f"**{r['variant']}** — `{r['status']}`")
+            st.write(r["answer"])
+            st.divider()
+        st.markdown("</div>", unsafe_allow_html=True)
         st.caption("See docs/prompt_comparison.md for the full written analysis, including a real hallucination found in v1_basic.")

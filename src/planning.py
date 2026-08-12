@@ -79,14 +79,11 @@ def run_agent_turn(message: str, memory: "SessionMemory | None" = None, feedback
     for sub_task in sub_tasks:
         passages = retrieve(sub_task, top_k=2)
         context = "\n\n".join(f"[{p['source']}] {p['text']}" for p in passages)
-        response = run_tool_agent(sub_task, context=context)
-        answer_text = response["answer"]
-        if feedback and feedback.get("tone") == "empathetic":
-            answer_text = "I understand this is frustrating. " + answer_text
+        response = run_tool_agent(sub_task, context=context, feedback=feedback)
         answers.append({
             "sub_task": sub_task,
             "status": response["status"],
-            "answer": answer_text,
+            "answer": response["answer"],
             "sources": [p["source"] for p in passages],
             "tool_trace": response.get("trace", []),
         })

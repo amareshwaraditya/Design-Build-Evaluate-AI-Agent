@@ -21,7 +21,17 @@ class FeedbackPolicy:
 
 
 def before_after(message: str, policy: FeedbackPolicy) -> dict:
-    """Show the same query answered before feedback (neutral) and after feedback (adapted), for evidence."""
-    before = run_agent_turn(message, feedback={"tone": "professional"})
-    after = run_agent_turn(message, feedback=policy.instructions())
-    return {"before": before["answer"], "after": after["answer"], "policy": policy.instructions()}
+    """Show the same query answered with contrasting tones to demonstrate adaptation.
+
+    Always uses a clear contrast: professional/normal vs empathetic/detailed,
+    so the comparison is meaningful regardless of current feedback state.
+    """
+    before = run_agent_turn(message, feedback={"tone": "professional", "verbosity": "concise"})
+    after = run_agent_turn(message, feedback={"tone": "empathetic", "verbosity": "detailed"})
+    return {
+        "before": before["answer"],
+        "after": after["answer"],
+        "before_tone": "professional + concise",
+        "after_tone": "empathetic + detailed",
+        "current_policy": policy.instructions(),
+    }

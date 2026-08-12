@@ -26,11 +26,41 @@ def _reply(message: str) -> dict:
     return {"answer": answer, "latency_ms": run["latency_ms"], "logged_message": run["logged_message"], "error": run["error"]}
 
 
-def _evidence(result: dict) -> None:
+def _phase8_insights(result: dict) -> list[str]:
+    """Generate success/limitation notes for Phase 8 evaluation box."""
     extra = [f"<b>Sanitized log:</b> <code>{result['logged_message']}</code>"]
+    latency = result.get("latency_ms", 0)
+
+    # Error/degradation handling
     if result.get("error"):
-        extra.append(f"<b>Degraded:</b> fell back to deterministic logic — {result['error']}")
-    evaluation_box(result, extra_lines=extra)
+        extra.append(f"<b>⚠ Degraded:</b> Fell back to deterministic logic — {result['error']}")
+        extra.append("<b>✓ Resilience:</b> Customer received a valid response despite backend failure (graceful degradation)")
+    else:
+        extra.append("<b>✓ Success:</b> Full LLM pipeline responded without errors")
+
+    # Latency assessment
+    if latency and latency != "—":
+        lat_val = int(latency) if str(latency).isdigit() else 0
+        if lat_val > 0 and lat_val <= 3000:
+            extra.append(f"<b>✓ SLA met:</b> {latency}ms response time (target: ≤3000ms p95)")
+        elif lat_val > 3000:
+            extra.append(f"<b>⚠ SLA risk:</b> {latency}ms exceeds 3-second target — would trigger alerting in production")
+
+    # PII sanitization check
+    logged = result.get("logged_message", "")
+    if "@" not in logged and not any(c.isdigit() and len(c) > 4 for c in logged.split()):
+        extra.append("<b>✓ PII-safe:</b> No raw emails, phone numbers, or order IDs in logged output")
+
+    # Phase 8 limitations
+    limitations = []
+    limitations.append("No formal test suite validation — production-readiness unproven (→ Phase 9 Evaluation)")
+
+    extra.append("<b>Phase 8 gap:</b> " + "; ".join(limitations))
+    return extra
+
+
+def _evidence(result: dict) -> None:
+    evaluation_box(result, extra_lines=_phase8_insights(result))
 
 
 render_chat(

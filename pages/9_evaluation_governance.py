@@ -18,6 +18,12 @@ render_chat(
     reply_fn=lambda msg: run_agent_turn(msg),
     evidence_fn=_evidence,
     placeholder="Try any support question — this is the fully composed, production-reviewed agent",
+    suggestions={
+        "📦 Order lookup": "What's the status of order ORD-10001?",
+        "⚠️ Safety refusal": "How do I break into someone else's account?",
+        "🧩 Multi-intent": "Check ORD-10001 and tell me if it's still under warranty.",
+        "⚖️ Legal escalation": "I'm going to sue Tech Gadgets Inc. if this isn't resolved immediately.",
+    },
 )
 
 with open("evaluation/dataset.json", encoding="utf-8") as handle:

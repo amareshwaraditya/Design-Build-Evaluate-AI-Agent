@@ -119,6 +119,56 @@ st.table(
     }
 )
 
+st.markdown("### Why an AI agent? — Solution justification")
+st.write(
+    "Alternatives considered: (1) Hire more Tier-1 agents — does not scale with 15% QoQ growth and adds linear cost. "
+    "(2) Expand FAQ / self-service — helps with simple lookups but cannot handle contextual reasoning, multi-intent requests, or order-specific verification. "
+    "(3) Decision-tree chatbot — rigid, requires constant manual updates, and fails on edge cases. "
+    f"An AI agent ({ATHENA_NAME}) is chosen because it combines real-time reasoning, policy grounding via RAG, tool-calling for verified data, "
+    "and graceful escalation — delivering instant, consistent Tier-1 resolution while preserving human specialists for complex cases."
+)
+
+st.markdown("### Stakeholder map")
+st.table({
+    "Stakeholder": ["Customer (Sarah Chen)", "Tier-1 Support Agent", "CS Operations Manager", "Product / Engineering", "Compliance & Legal"],
+    "Role": [
+        "End user receiving support",
+        "Handles overflow and escalations",
+        "Owns SLA targets and staffing",
+        "Builds and maintains the AI system",
+        "Ensures policy accuracy and data safety",
+    ],
+    "Key concern": [
+        "Speed, accuracy, no repetition",
+        "Reduced repetitive load, clear escalation triggers",
+        "Containment rate, CSAT, cost per contact",
+        "Observability, graceful degradation, maintainability",
+        "No PII leaks, no fabricated policy, audit trail",
+    ],
+})
+
+st.markdown("### Evaluation planning")
+st.write(
+    "Success criteria will be validated through a **fixed test suite** (Phase 9) covering:"
+)
+st.markdown(
+    "- **Quality**: Does the response correctly address the customer's intent using verified information?\n"
+    "- **Safety**: Are unsafe/out-of-scope requests refused? Is PII detected and redacted?\n"
+    "- **Policy compliance**: Do answers match the documented knowledge base without fabrication?\n"
+    "- **Graceful failure**: Does the system degrade to deterministic logic (not errors) when the LLM is unavailable?\n"
+    "- **Latency**: Is p95 response time within the 3-second SLA target?"
+)
+st.info(
+    "The test dataset (`evaluation/dataset.json`) contains representative cases for each failure mode above. "
+    "Phase 9 runs every test case through the full agent pipeline and produces a quantitative scorecard."
+)
+
+st.markdown("### Capability-to-phase mapping")
+st.table({
+    "Success Metric": ["CSAT ≥ 4.2", "FCR ≥ 70%", "Containment ≥ 65%", "SLA Compliance ≥ 95%", "AHT ≤ 3 min", "QA Score ≥ 90%", "Escalation ≤ 20%", "Policy Accuracy ≥ 90%"],
+    "Delivered by Phase": ["P3 (natural tone) + P7 (adaptation)", "P4 (RAG) + P5 (tools)", "P5 (tools) + P6 (planning)", "P3 (instant LLM) + P8 (monitoring)", "P3 (LLM) + P5 (tools)", "P9 (evaluation suite)", "P2 (safety) + P5 (escalate tool)", "P4 (RAG grounding)"],
+})
+
 st.markdown("---")
 doc_path = Path("docs/phase1_problem_statement.md")
 if doc_path.exists():

@@ -29,6 +29,8 @@ render_chat(
     suggestions={
         "💳 Refund question": "I want to return a product I bought 2 weeks ago.",
         "⚠️ Unsafe request": "Can you hack into my competitor's account?",
+        "🔧 Troubleshooting": "My SmartWatch Pro X1 won't turn on after charging overnight.",
+        "📦 Delivery concern": "My order was supposed to arrive 3 days ago and tracking hasn't updated.",
     },
 )
 

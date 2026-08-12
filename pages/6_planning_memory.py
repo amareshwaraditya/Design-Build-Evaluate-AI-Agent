@@ -28,6 +28,8 @@ render_chat(
     suggestions={
         "🧩 Multi-part request": "Check my order ORD-10001 and tell me whether it is under warranty",
         "📦 Simple follow-up": "My order is ORD-10001",
+        "🔀 Triple intent": "What's the status of ORD-10001, what's your return policy, and is my warranty still valid?",
+        "💬 Context test": "I asked about order ORD-10003 earlier — is it eligible for a refund?",
     },
 )
 

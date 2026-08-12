@@ -38,6 +38,8 @@ render_chat(
     suggestions={
         "📦 Late return": "Can I return order ORD-10002? I bought it 45 days ago.",
         "🔧 Warranty coverage": "What does the standard warranty cover?",
+        "🚚 Shipping policy": "Do you offer free shipping, and how long does delivery take?",
+        "🔒 Account security": "What happens if I forget my password — how do I reset it?",
     },
 )
 

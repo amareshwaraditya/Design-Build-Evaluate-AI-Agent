@@ -152,6 +152,59 @@ Success is measured using standard contact-center service metrics, not implement
 
 ---
 
-## 7. Scope Boundary for Phase 1
+## 7. Why an AI Agent? — Solution Justification
+
+| Alternative | Limitation |
+|---|---|
+| Hire more Tier-1 agents | Linear cost scaling; does not solve consistency or speed |
+| Expand FAQ / self-service portal | Handles simple lookups only; cannot reason, verify orders, or handle multi-intent |
+| Decision-tree chatbot | Rigid; requires constant manual updates; fails on edge cases and nuance |
+
+**Chosen approach:** An AI agent (Athena) combining real-time LLM reasoning, policy grounding via RAG, scoped tool-calling for verified data, and graceful escalation — delivering instant, consistent Tier-1 resolution while preserving human specialists for complex cases.
+
+---
+
+## 8. Stakeholder Map
+
+| Stakeholder | Role | Key Concern |
+|---|---|---|
+| Customer (Sarah Chen) | End user receiving support | Speed, accuracy, no repetition |
+| Tier-1 Support Agent | Handles overflow and escalations | Reduced repetitive load, clear escalation triggers |
+| CS Operations Manager | Owns SLA targets and staffing | Containment rate, CSAT, cost per contact |
+| Product / Engineering | Builds and maintains the AI system | Observability, graceful degradation, maintainability |
+| Compliance & Legal | Ensures policy accuracy and data safety | No PII leaks, no fabricated policy, audit trail |
+
+---
+
+## 9. Evaluation Planning
+
+Success criteria will be validated through a **fixed test suite** (Phase 9) covering:
+
+- **Quality**: Does the response correctly address the customer's intent using verified information?
+- **Safety**: Are unsafe/out-of-scope requests refused? Is PII detected and redacted?
+- **Policy compliance**: Do answers match the documented knowledge base without fabrication?
+- **Graceful failure**: Does the system degrade to deterministic logic (not errors) when the LLM is unavailable?
+- **Latency**: Is p95 response time within the 3-second SLA target?
+
+The test dataset (`evaluation/dataset.json`) contains representative cases for each failure mode. Phase 9 runs every test case through the full agent pipeline and produces a quantitative scorecard.
+
+---
+
+## 10. Capability-to-Phase Mapping
+
+| Success Metric | Delivered by Phase |
+|---|---|
+| CSAT ≥ 4.2 | Phase 3 (natural tone) + Phase 7 (feedback adaptation) |
+| First Contact Resolution ≥ 70% | Phase 4 (RAG policy grounding) + Phase 5 (tool verification) |
+| Containment Rate ≥ 65% | Phase 5 (tools) + Phase 6 (multi-intent planning) |
+| SLA Compliance ≥ 95% | Phase 3 (instant LLM) + Phase 8 (monitoring + fallback) |
+| Average Handle Time ≤ 3 min | Phase 3 (LLM speed) + Phase 5 (automated tool lookup) |
+| QA Score ≥ 90% | Phase 9 (evaluation suite) |
+| Escalation Rate ≤ 20% | Phase 2 (safety pre-check) + Phase 5 (escalate_to_human tool) |
+| Policy Accuracy ≥ 90% | Phase 4 (RAG grounding from knowledge_base) |
+
+---
+
+## 11. Scope Boundary for Phase 1
 
 This document defines the **problem, the customer, the operational workflow, and the success bar**. It intentionally does not describe how the resolution step will be technically implemented — that evolution is demonstrated phase by phase, starting with a basic rule-based attempt in Phase 2.

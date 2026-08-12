@@ -28,7 +28,12 @@ render_chat(
     reply_fn=lambda msg: run_agent_turn(msg, feedback=policy.instructions()),
     evidence_fn=_evidence,
     placeholder="Ask a support question, then rate the response above",
-    suggestions={"😤 Frustrated customer": "My package is delayed and I'm frustrated"},
+    suggestions={
+        "😤 Frustrated customer": "My package is delayed and I'm frustrated — this is unacceptable!",
+        "😊 Happy inquiry": "Hi! Just wondering when my SmartWatch Pro X1 will arrive — so excited!",
+        "😐 Neutral question": "Can you tell me the status of order ORD-10001?",
+        "😡 Very unhappy": "This is the THIRD time I've asked about my refund and nobody helps me!",
+    },
 )
 
 with st.expander("Technical evidence: feedback policy & before/after comparison"):

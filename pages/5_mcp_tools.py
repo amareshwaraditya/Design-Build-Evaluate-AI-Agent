@@ -26,6 +26,8 @@ render_chat(
     suggestions={
         "📦 Order status": "What's the status of order ORD-10001?",
         "❓ Unknown order": "Is order ORD-99999 covered under warranty?",
+        "🛡️ Warranty check": "Is my order ORD-10003 still under warranty?",
+        "🚨 Escalation": "I've been waiting 2 weeks with no response and I want to speak to a manager.",
     },
 )
 

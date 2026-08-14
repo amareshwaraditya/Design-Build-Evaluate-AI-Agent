@@ -9,6 +9,7 @@ from pathlib import Path
 from .config import settings
 
 _INDEX_CACHE: dict[str, object] = {}
+_RETRIEVAL_STATUS: dict[str, dict[str, object]] = {}
 
 
 def load_policy_documents(root: str = "knowledge_base") -> list[dict]:
@@ -42,12 +43,27 @@ def _build_index(root: str):
             chunks.append(Document(page_content=piece, metadata={"source": item["source"]}))
     index = FAISS.from_documents(chunks, OpenAIEmbeddings(model=settings.embedding_model))
     _INDEX_CACHE[root] = index
+    _RETRIEVAL_STATUS[root] = {
+        "mode": "faiss",
+        "chunk_count": len(chunks),
+        "model": settings.embedding_model,
+    }
     return index
+
+
+def retrieval_status(root: str = "knowledge_base") -> dict[str, object]:
+    """Return the current retrieval mode for UI status reporting."""
+    if root in _INDEX_CACHE:
+        return _RETRIEVAL_STATUS[root]
+    if not settings.has_api_key:
+        return {"mode": "keyword", "reason": "OpenAI API key is not configured"}
+    return {"mode": "pending"}
 
 
 def retrieve(query: str, documents: list[dict] | None = None, top_k: int = 3, root: str = "knowledge_base") -> list[dict]:
     """Semantic search over the knowledge base. Returns [] when nothing is relevant enough (no guessing)."""
     if not settings.has_api_key:
+        _RETRIEVAL_STATUS[root] = {"mode": "keyword", "reason": "OpenAI API key is not configured"}
         return _keyword_fallback(query, documents or load_policy_documents(root), top_k)
     try:
         index = _build_index(root)
@@ -56,7 +72,8 @@ def retrieve(query: str, documents: list[dict] | None = None, top_k: int = 3, ro
             {"source": doc.metadata["source"], "text": doc.page_content, "distance": round(float(score), 4)}
             for doc, score in matches
         ]
-    except Exception:
+    except Exception as exc:
+        _RETRIEVAL_STATUS[root] = {"mode": "keyword", "reason": type(exc).__name__}
         return _keyword_fallback(query, documents or load_policy_documents(root), top_k)
 
 

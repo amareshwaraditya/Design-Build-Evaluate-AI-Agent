@@ -10,7 +10,7 @@ import time
 import uuid
 
 from .config import settings
-from .observability import _langsmith_available, get_langsmith_project_runs
+from .observability import _langsmith_available, get_langsmith_project_runs, run_with_langsmith_tracing
 from .planning import run_agent_turn
 
 
@@ -54,7 +54,7 @@ def run_evaluation(cases: list[dict]) -> dict:
             _start_langsmith_eval_run(str(uuid.uuid4()))
 
         try:
-            observed = run_agent_turn(case["input"])
+            observed = run_with_langsmith_tracing(run_agent_turn, case["input"])
         except Exception as exc:  # noqa: BLE001
             # Graceful degradation: if the agent crashes on a test case, record it as failure
             observed = {"status": "error", "answer": f"Agent error: {type(exc).__name__}"}

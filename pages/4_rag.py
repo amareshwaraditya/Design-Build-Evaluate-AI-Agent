@@ -1,6 +1,6 @@
 import streamlit as st
 from src.llm_agent import llm_response
-from src.rag import load_policy_documents, retrieve
+from src.rag import load_policy_documents, retrieval_status, retrieve
 from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
 st.set_page_config(page_title="Athena - Company Knowledge", page_icon="📚", layout="wide")
@@ -12,7 +12,22 @@ try:
 except Exception as e:
     docs = []
     st.error(f"Failed to load knowledge base: {e}")
-st.caption(f"{len(docs)} knowledge-base documents indexed (`knowledge_base/*.md`).")
+st.caption(f"{len(docs)} knowledge-base documents available (`knowledge_base/*.md`).")
+
+
+def _retrieval_status_text() -> str:
+    status = retrieval_status()
+    if status["mode"] == "faiss":
+        return (
+            f"✅ FAISS embeddings ready — {status['chunk_count']} chunks indexed "
+            f"with `{status['model']}`."
+        )
+    if status["mode"] == "keyword":
+        return f"⚠️ Keyword fallback active — FAISS embeddings unavailable ({status['reason']})."
+    return "ℹ️ FAISS embeddings will be built on the first policy retrieval."
+
+
+st.info(_retrieval_status_text())
 
 
 def _reply(message: str) -> dict:
@@ -28,6 +43,7 @@ def _phase4_insights(result: dict) -> list[str]:
     sources = result.get("sources") or []
     source_names = ", ".join(sorted({p["source"] for p in sources})) if sources else "none"
     extra = [f"<b>Retrieved from:</b> {source_names}"]
+    extra.append(f"<b>Retrieval engine:</b> {_retrieval_status_text()}")
     status = result.get("status", "resolved")
 
     # Success indicators
@@ -84,6 +100,7 @@ with st.expander("Technical evidence: retrieval quality & with/without compariso
             st.markdown(f"**{match['source']}** (distance {match.get('distance', '—')})")
             st.write(match["text"])
         st.markdown("</div>", unsafe_allow_html=True)
+        st.success(_retrieval_status_text())
     st.markdown("**Compare: answer without retrieval vs. with retrieval**")
     compare_message = st.text_input("Grounded question", "Can I return order ORD-10001 after purchase?")
     col1, col2 = st.columns(2)

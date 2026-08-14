@@ -37,7 +37,12 @@ class Settings:
     embedding_model: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
     temperature: float = float(os.getenv("AGENT_TEMPERATURE", "0.3"))
     max_tool_iterations: int = int(os.getenv("AGENT_MAX_TOOL_ITERATIONS", "3"))
-    langsmith_project: str = os.getenv("LANGCHAIN_PROJECT", "customer-support-resolution-agent")
+    langsmith_project: str = os.getenv(
+        "LANGSMITH_PROJECT", os.getenv("LANGCHAIN_PROJECT", "customer-support-resolution-agent")
+    )
+    langsmith_tracing_enabled: bool = os.getenv(
+        "LANGSMITH_TRACING", os.getenv("LANGCHAIN_TRACING_V2", "")
+    ).lower() == "true"
 
     @property
     def has_api_key(self) -> bool:
@@ -45,3 +50,8 @@ class Settings:
         return bool(key.strip())
 
 settings = Settings()
+
+# Do not let an environment-level flag trace every page. Phases 8 and 9 opt in
+# with a LangChain tracing context around their monitored/evaluation runs.
+os.environ["LANGSMITH_TRACING"] = "false"
+os.environ["LANGCHAIN_TRACING_V2"] = "false"

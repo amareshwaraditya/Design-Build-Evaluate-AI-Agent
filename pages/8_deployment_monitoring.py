@@ -4,10 +4,9 @@ Demonstrates: latency capture, PII-safe logging, LangSmith tracing (when configu
 and automatic fallback to deterministic logic on LLM failure.
 """
 
-import os
 import streamlit as st
 from src.config import settings
-from src.observability import traced_run, get_langsmith_project_runs
+from src.observability import _langsmith_available, traced_run, get_langsmith_project_runs
 from src.planning import run_agent_turn
 from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
@@ -17,10 +16,7 @@ chat_header("Phase 8 — this is the same monitored request path used by the dep
 
 # Service status panel
 with st.expander("Service status", expanded=False):
-    langsmith_configured = (
-        os.getenv("LANGCHAIN_TRACING_V2", "").lower() == "true"
-        and bool(os.getenv("LANGCHAIN_API_KEY", "").strip())
-    )
+    langsmith_configured = _langsmith_available()
     st.json({
         "mode": settings.mode,
         "model": settings.model,
@@ -118,19 +114,23 @@ render_chat(
 
 # LangSmith dashboard (when available)
 with st.expander("LangSmith project dashboard (recent runs)"):
-    runs = get_langsmith_project_runs(limit=5)
+    dashboard = get_langsmith_project_runs(limit=5)
+    runs = dashboard["runs"]
     if runs:
         st.table({
             "Run": [r["name"] or "—" for r in runs],
             "Status": [r["status"] for r in runs],
+            "Start time": [r["start_time"] or "—" for r in runs],
             "Latency": [f"{r['latency_ms']}ms" if r["latency_ms"] else "—" for r in runs],
             "Tokens": [r["total_tokens"] or "—" for r in runs],
         })
-    elif runs is None:
-        st.info(
-            "LangSmith is not configured. To see traced runs here, set "
-            "`LANGCHAIN_TRACING_V2=true` and provide a valid `LANGCHAIN_API_KEY`.",
-            icon=":material/link_off:",
+    elif not langsmith_configured:
+        st.info("LangSmith tracing is not configured for Phase 8.", icon=":material/link_off:")
+    elif dashboard["error"]:
+        st.warning(
+            f"LangSmith tracing is enabled, but the recent-runs dashboard could not be loaded. "
+            f"{dashboard['error']} Verify the configured endpoint and LangSmith client version.",
+            icon=":material/error_outline:",
         )
     else:
         st.caption("No recent runs found in the project.")

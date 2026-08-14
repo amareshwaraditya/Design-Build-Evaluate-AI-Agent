@@ -5,11 +5,11 @@ latency SLA analysis, LangSmith project analytics (when configured), and a docum
 failure case with root-cause analysis and fix proof.
 """
 
+import html
 import json
-import os
 import streamlit as st
 from src.evaluation import get_evaluation_summary, run_evaluation
-from src.observability import _langsmith_available, get_langsmith_project_runs
+from src.observability import _langsmith_available, get_langsmith_project_runs, run_with_langsmith_tracing
 from src.config import settings
 from src.planning import run_agent_turn
 from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
@@ -71,9 +71,35 @@ def _evidence(result: dict) -> None:
     evaluation_box(result, extra_lines=_phase9_insights(result))
 
 
+def _render_langsmith_runs(runs: list[dict]) -> None:
+    """Render a compact, readable analytics table without altering other page tables."""
+    rows = []
+    for run in runs:
+        latency = f"{run['latency_ms']}ms" if run["latency_ms"] is not None else "—"
+        values = [
+            run["name"] or "—", run["status"] or "—", run["start_time"] or "—", latency,
+            run["total_tokens"] or "—", run.get("error") or "—",
+        ]
+        cells = "".join(
+            f'<td style="padding:0.45rem 0.6rem;border:1px solid #e6e9ef;">{html.escape(str(value))}</td>'
+            for value in values
+        )
+        rows.append(f"<tr>{cells}</tr>")
+    headers = "".join(
+        f'<th style="padding:0.45rem 0.6rem;border:1px solid #e6e9ef;text-align:left;font-weight:600;">{label}</th>'
+        for label in ("Run", "Status", "Start time", "Latency", "Tokens", "Error")
+    )
+    table_html = (
+        '<div style="overflow-x:auto;font-size:0.88rem;">'
+        '<table style="width:100%;border-collapse:collapse;font-size:inherit;">'
+        f"<thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+    st.markdown(table_html, unsafe_allow_html=True)
+
+
 render_chat(
     session_key="phase9_chat",
-    reply_fn=lambda msg: run_agent_turn(msg),
+    reply_fn=lambda msg: run_with_langsmith_tracing(run_agent_turn, msg),
     evidence_fn=_evidence,
     placeholder="Try any support question — this is the fully composed, production-reviewed agent",
     suggestions={
@@ -83,6 +109,28 @@ render_chat(
         "⚖️ Legal escalation": "I'm going to sue Tech Gadgets Inc. if this isn't resolved immediately.",
     },
 )
+
+# LangSmith analytics appears directly below the chat response metadata.
+with st.expander("LangSmith project analytics (traced runs)"):
+    if langsmith_configured:
+        dashboard = get_langsmith_project_runs(limit=10)
+        runs = dashboard["runs"]
+        if runs:
+            _render_langsmith_runs(runs)
+            st.caption(
+                f"Showing last {len(runs)} traced runs from project '{settings.langsmith_project}'. "
+                "Visit LangSmith dashboard for full analytics, cost tracking, and run comparison."
+            )
+        elif dashboard["error"]:
+            st.warning(
+                "LangSmith tracing is enabled, but project runs could not be loaded. "
+                f"{dashboard['error']} Verify the configured endpoint and LangSmith client version.",
+                icon=":material/error_outline:",
+            )
+        else:
+            st.caption("No recent runs found in the LangSmith project. Run the evaluation suite below to generate traced data.")
+    else:
+        st.info("LangSmith tracing is not configured for Phase 9.", icon=":material/link_off:")
 
 # Load evaluation dataset
 try:
@@ -153,10 +201,11 @@ with st.expander("Formal evaluation suite", expanded=True):
                     st.write(c["answer"])
                     st.divider()
 
-# LangSmith project analytics
-with st.expander("LangSmith project analytics (traced runs)"):
+# Analytics is rendered above the formal suite, beside the response metadata.
+if False:  # pragma: no cover
     if langsmith_configured:
-        runs = get_langsmith_project_runs(limit=10)
+        dashboard = get_langsmith_project_runs(limit=10)
+        runs = dashboard["runs"]
         if runs:
             st.table({
                 "Run": [r["name"] or "—" for r in runs],
@@ -168,6 +217,12 @@ with st.expander("LangSmith project analytics (traced runs)"):
             st.caption(
                 f"Showing last {len(runs)} traced runs from project '{settings.langsmith_project}'. "
                 "Visit LangSmith dashboard for full analytics, cost tracking, and run comparison."
+            )
+        elif dashboard["error"]:
+            st.warning(
+                f"LangSmith tracing is enabled, but project runs could not be loaded. "
+                f"{dashboard['error']} Verify the configured endpoint and LangSmith client version.",
+                icon=":material/error_outline:",
             )
         else:
             st.caption("No recent runs found in the LangSmith project. Run the evaluation suite above to generate traced data.")

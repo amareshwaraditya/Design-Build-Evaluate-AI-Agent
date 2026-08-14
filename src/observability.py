@@ -7,6 +7,7 @@ to local-only metrics when LangSmith is unavailable or API key is missing/invali
 import os
 import time
 import uuid
+from contextlib import nullcontext
 
 from .config import settings
 from .safety import sanitize_for_log
@@ -15,13 +16,32 @@ from .safety import sanitize_for_log
 def _langsmith_available() -> bool:
     """Check if LangSmith tracing is configured and enabled.
 
-    Requires both LANGCHAIN_TRACING_V2=true and a non-empty LANGCHAIN_API_KEY.
+    Accepts both current LANGSMITH_* and legacy LANGCHAIN_* configuration names.
+    Tracing is deliberately scoped to phases 8 and 9, rather than enabled globally.
     Used by Phase 8 (monitoring) and Phase 9 (evaluation) for conditional UI.
     """
     return (
-        os.getenv("LANGCHAIN_TRACING_V2", "").lower() == "true"
-        and bool(os.getenv("LANGCHAIN_API_KEY", "").strip())
+        settings.langsmith_tracing_enabled
+        and bool(os.getenv("LANGSMITH_API_KEY", os.getenv("LANGCHAIN_API_KEY", "")).strip())
     )
+
+
+def langsmith_tracing_scope():
+    """Return a context that enables tracing only for one monitored operation."""
+    if not _langsmith_available():
+        return nullcontext()
+    try:
+        from langchain_core.tracers.context import tracing_v2_enabled
+
+        return tracing_v2_enabled(project_name=settings.langsmith_project)
+    except ImportError:
+        return nullcontext()
+
+
+def run_with_langsmith_tracing(function, *args, **kwargs):
+    """Run one Phase 8/9 operation with LangSmith tracing enabled."""
+    with langsmith_tracing_scope():
+        return function(*args, **kwargs)
 
 
 def _get_langsmith_trace_url(run_id: str) -> str | None:
@@ -32,8 +52,7 @@ def _get_langsmith_trace_url(run_id: str) -> str | None:
     if not _langsmith_available():
         return None
     try:
-        from langsmith import Client
-        client = Client()
+        client = _langsmith_client()
         run = client.read_run(run_id)
         return run.url if run else None
     except Exception:
@@ -48,8 +67,7 @@ def _get_langsmith_run_stats(run_id: str) -> dict | None:
     if not _langsmith_available():
         return None
     try:
-        from langsmith import Client
-        client = Client()
+        client = _langsmith_client()
         run = client.read_run(run_id)
         if run:
             return {
@@ -85,7 +103,7 @@ def traced_run(function, message: str, **kwargs) -> dict:
         os.environ.setdefault("LANGCHAIN_RUN_ID", run_id)
 
     try:
-        result = function(message, **kwargs)
+        result = run_with_langsmith_tracing(function, message, **kwargs)
         if isinstance(result, dict) and result.get("status") == "error":
             raise RuntimeError(result.get("error", "live agent error"))
 
@@ -123,31 +141,76 @@ def traced_run(function, message: str, **kwargs) -> dict:
         os.environ.pop("LANGCHAIN_RUN_ID", None)
 
 
-def get_langsmith_project_runs(limit: int = 10) -> list[dict] | None:
-    """Fetch recent runs from the LangSmith project for dashboard display.
+def _langsmith_client():
+    """Create a client from either current LANGSMITH_* or legacy LANGCHAIN_* settings."""
+    from langsmith import Client
 
-    Returns None if LangSmith is unavailable. Used by Phase 9 for evaluation context.
-    """
-    if not _langsmith_available():
+    api_key = os.getenv("LANGSMITH_API_KEY", os.getenv("LANGCHAIN_API_KEY", ""))
+    endpoint = os.getenv("LANGSMITH_ENDPOINT", os.getenv("LANGCHAIN_ENDPOINT", ""))
+    return Client(api_key=api_key, api_url=endpoint or None)
+
+
+def _latency_ms(run) -> float | None:
+    """Read a run duration across LangSmith client/API response versions."""
+    total_time = getattr(run, "total_time", None)
+    if total_time is not None:
+        if hasattr(total_time, "total_seconds"):
+            return round(total_time.total_seconds() * 1000, 2)
+        try:
+            return round(float(total_time) * 1000, 2)
+        except (TypeError, ValueError):
+            pass
+
+    start_time = getattr(run, "start_time", None)
+    end_time = getattr(run, "end_time", None)
+    if start_time is not None and end_time is not None:
+        try:
+            return round((end_time - start_time).total_seconds() * 1000, 2)
+        except (AttributeError, TypeError):
+            pass
+    return None
+
+
+def _start_time_display(run) -> str | None:
+    """Format a LangSmith run start timestamp in the machine's local timezone."""
+    start_time = getattr(run, "start_time", None)
+    if start_time is None:
         return None
     try:
-        from langsmith import Client
-        client = Client()
+        return start_time.astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+    except (AttributeError, ValueError, TypeError):
+        return str(start_time)
+
+
+def get_langsmith_project_runs(limit: int = 10) -> dict:
+    """Fetch recent runs from the LangSmith project for dashboard display.
+
+    Returns the runs or a safe diagnostic. Used by Phase 8 and Phase 9 dashboards.
+    """
+    if not _langsmith_available():
+        return {"runs": None, "error": "LangSmith tracing is not enabled or its API key is missing."}
+    try:
+        client = _langsmith_client()
         runs = list(client.list_runs(
             project_name=settings.langsmith_project,
             limit=limit,
         ))
-        return [
-            {
-                "id": str(run.id),
-                "name": run.name,
-                "status": run.status,
-                "latency_ms": round(run.total_time * 1000, 2) if run.total_time else None,
-                "total_tokens": run.total_tokens,
-                "error": run.error,
-                "url": run.url,
-            }
-            for run in runs
-        ]
-    except Exception:
-        return None
+        normalized_runs = []
+        for run in runs:
+            try:
+                run_url = client.get_run_url(run=run)
+            except Exception:  # URL support varies across LangSmith client versions.
+                run_url = None
+            normalized_runs.append({
+                "id": str(getattr(run, "id", "")),
+                "name": getattr(run, "name", None),
+                "status": getattr(run, "status", None),
+                "start_time": _start_time_display(run),
+                "latency_ms": _latency_ms(run),
+                "total_tokens": getattr(run, "total_tokens", None),
+                "error": getattr(run, "error", None),
+                "url": run_url,
+            })
+        return {"runs": normalized_runs, "error": None}
+    except Exception as exc:  # noqa: BLE001 - diagnostic is shown without sensitive details
+        return {"runs": None, "error": f"Could not load LangSmith runs ({type(exc).__name__})."}

@@ -9,6 +9,8 @@ chat_header("Phase 7 — Athena adapts her tone based on how you rate her previo
 
 if "phase7_feedback" not in st.session_state:
     st.session_state.phase7_feedback = FeedbackPolicy()
+if "phase7_selected_rating" not in st.session_state:
+    st.session_state.phase7_selected_rating = None
 policy: FeedbackPolicy = st.session_state.phase7_feedback
 
 st.markdown("#### How it works")
@@ -28,8 +30,14 @@ for i, col in enumerate(star_cols[:5], start=1):
     with col:
         if st.button(f"{'⭐' * i}", key=f"star_{i}", use_container_width=True):
             policy.add(i)
+            st.session_state.phase7_selected_rating = i
             st.toast(f"Rated {i}/5 — rolling average now {policy.instructions()['average']}")
             st.rerun()
+
+# Make the most recently selected star option explicit after every rerun.
+selected_rating = st.session_state.phase7_selected_rating
+if selected_rating is not None:
+    st.success(f"Selected rating: {selected_rating}/5")
 
 # Show current feedback state
 applied = policy.instructions()

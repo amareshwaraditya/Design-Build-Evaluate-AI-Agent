@@ -16,17 +16,18 @@ LOGO_PATH = ROOT / "assets" / "techgadgets-logo.png"
 
 # --- Navigation pages: (file_path, sidebar_title) ---
 page_files = [
-    ("pages/1_problem_framing.py", "Phase 1 - Athena's Purpose"),
-    ("pages/2_baseline.py", "Phase 2 - Athena's Basic Support"),
-    ("pages/3_llm_integration.py", "Phase 3 - Athena Gains Reasoning"),
-    ("pages/4_rag.py", "Phase 4 - Athena Knows Policy"),
-    ("pages/5_mcp_tools.py", "Phase 5 - Athena Uses Tools"),
-    ("pages/6_planning_memory.py", "Phase 6 - Athena Uses Context"),
-    ("pages/7_adaptation.py", "Phase 7 - Athena Is Adaptive"),
-    ("pages/8_deployment_monitoring.py", "Phase 8 - Athena's Deployment"),
-    ("pages/9_evaluation_governance.py", "Phase 9 - Athena's Evaluation"),
+    ("pages/1_problem_framing.py", "Phase 1: Understand the Problem & Define Success"),
+    ("pages/2_baseline.py", "Phase 2: Build a Basic Working Agent"),
+    ("pages/3_llm_integration.py", "Phase 3: Make the Agent Smarter"),
+    ("pages/4_rag.py", "Phase 4: Add Knowledge & Retrieval"),
+    ("pages/5_mcp_tools.py", "Phase 5: Enable Tool Usage"),
+    ("pages/6_planning_memory.py", "Phase 6: Planning, Memory & Context"),
+    ("pages/7_adaptation.py", "Phase 7: Adaptive Behaviour"),
+    ("pages/8_deployment_monitoring.py", "Phase 8: Deployment Readiness"),
+    ("pages/9_evaluation_governance.py", "Phase 9: Evaluation & Engineering Review"),
 ]
 pages = [st.Page(path, title=title) for path, title in page_files]
+judge_pages = [st.Page("pages/demo_data.py", title="Order & Scenarios", icon="🗂️")]
 
 # --- Global CSS styles ---
 st.markdown(
@@ -44,15 +45,30 @@ st.markdown(
             font-size: 1.05rem !important;
         }
 
+        /* Keep long technical prompts readable without horizontal scrolling. */
+        [data-testid="stCode"],
+        [data-testid="stCode"] pre,
+        [data-testid="stCode"] code {
+            max-width: 100% !important;
+            white-space: pre-wrap !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word !important;
+        }
+        [data-testid="stCode"] {
+            overflow-x: hidden !important;
+        }
+
         /* Sidebar nav links */
         section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a {
-            font-size: 1.2rem;
-            line-height: 1.4;
-            padding: 0.4rem 0.75rem;
+            font-size: 1.05rem;
+            line-height: 1.3;
+            padding: 0.35rem 0.75rem;
             border-radius: 0.5rem;
-            margin: 0.1rem 0.25rem;
+            margin: 0.08rem 0.25rem;
             color: #1f1f1f !important;
             transition: background-color 0.2s ease;
+            white-space: normal;
+            overflow-wrap: anywhere;
         }
 
         /* Active page: blue pill highlight (#007cc3) */
@@ -77,7 +93,6 @@ st.markdown(
         button[kind="headerNoPadding"] {
             display: none !important;
         }
-        [data-testid="stSidebarNav"] h2,
         [data-testid="stSidebarNavSeparator"] {
             display: none !important;
         }
@@ -112,5 +127,5 @@ st.markdown(
 st.sidebar.image(str(LOGO_PATH), use_container_width=False, width=180)
 
 # --- Run the selected page ---
-nav = st.navigation({"": pages})
+nav = st.navigation({"Phases": pages, "Demo Reference Data": judge_pages})
 nav.run()

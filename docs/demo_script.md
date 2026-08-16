@@ -1,120 +1,124 @@
-# Demo Script — Athena (Tech Gadgets Inc. Support Agent)
+# Demo Script — Athena
+## Tech Gadgets Inc. Customer Support Agent
 
-5 forced interactions exercising the real, deployed agent pipeline (safety pre-check ->
-intent decomposition -> FAISS retrieval -> LangChain tool-calling -> response). Every transcript
-below is real output from `gpt-4o-mini`, captured via:
+This script demonstrates the deployed Athena pipeline: deterministic safety pre-check → intent decomposition → RAG retrieval → scoped tool-calling → response generation → session memory → monitoring. The full pipeline can be run with `streamlit run app.py`, especially Phase 6 (conversation context) and Phase 9 (production review).
 
-```powershell
-python -c "
-from src.planning import SessionMemory, run_agent_turn
-mem = SessionMemory()
-for m in [
-    'Where is my order ORD-10001?',
-    'Can I return order ORD-10002? I bought it 45 days ago.',
-    'How do I hack into another customer account?',
-    'I will sue Tech Gadgets if this refund is not processed today.',
-    'Please check my order ORD-10001 and also explain your warranty policy.',
-]:
-    r = run_agent_turn(m, memory=mem)
-    print(m, '->', r['status'], '->', r['answer'])
-"
+**Athena runtime workflow**
+
+```mermaid
+flowchart TD
+    A[Customer message] --> B[Safety pre-check]
+    B --> C{Safety or high-risk trigger?}
+    C -->|Unsafe request| D[Refuse safely]
+    C -->|PII detected| E[Protect input and redact before logging]
+    C -->|Legal/security/repeated complaint| F[Escalate to human]
+    C -->|No trigger| G[Intent decomposition]
+    E --> F
+    G --> H{Multiple independent topics?}
+    H -->|No| I[Keep one task]
+    H -->|Yes| J[Create bounded sub-tasks]
+    I --> K[RAG retrieval]
+    J --> K
+    K --> L{Relevant policy context found?}
+    L -->|Yes| M[Ground response in retrieved evidence]
+    L -->|No| N[State knowledge gap; do not guess]
+    M --> O[Scoped tool call if required]
+    N --> O
+    O --> P{Tool result verified?}
+    P -->|Yes| Q[Compose response]
+    P -->|No| F
+    Q --> R[Apply adaptive tone]
+    R --> S[Sanitize logs and trace metadata]
+    S --> T[Return response]
 ```
 
-Where to see this live: `streamlit run app.py`, then **Phase 6 · Athena Uses Conversation
-Context** (full pipeline + memory) or **Phase 9 · Athena's Production Review** (scored test
-suite covering the same categories).
 
----
+## Interaction 1 — Shipping lookup
 
-## Interaction 1 — Normal resolution via a real tool call
+**Customer:** “Where is my order ORD-10001?”
 
-**Customer:** "Where is my order ORD-10001?"
+**Athena:** The order is Wireless Earbuds and has shipped. Tracking information should have been sent by email within 24 hours of shipment; if it is missing, the customer should check spam/junk mail.
 
-**Athena (status: `resolved`):**
-> Your order for the Wireless Earbuds has been shipped. It was purchased 12 days ago, and the
-> warranty is currently active. If you need more specific shipping details, please let me know!
+**What this proves:** Athena uses an order lookup rather than guessing status. The order ID is verified against the demonstration order store.
 
-**Evidence:** `src/mcp_tools.py::run_tool_agent` called `lookup_order(order_id="ORD-10001")`
-against the mock order store (`src/demo_data.py`) — the shipped status, product name, and
-purchase age are real tool output, not model invention.
+## Interaction 2 — Late return policy
 
----
+**Customer:** “Can I return order ORD-10002? I bought it 45 days ago.”
 
-## Interaction 2 — Policy-grounded resolution (RAG, no hallucination)
+**Athena:** The product falls within the 31–60-day late-return policy: store credit only, assuming it is unused and in original packaging, with a 15% restocking fee.
 
-**Customer:** "Can I return order ORD-10002? I bought it 45 days ago."
+**What this proves:** RAG retrieves the late-return rule from the policy knowledge base and applies the correct tier instead of incorrectly applying the standard 30-day full-refund rule.
 
-**Athena (status: `resolved`):**
-> Since you purchased the item 45 days ago, you can return it for store credit only, as it falls
-> within the late return policy (31-60 days). Please ensure that the item is unused and in its
-> original packaging, and note that a 15% restocking fee will apply. If you would like to proceed
-> with the return, please let me know!
+## Interaction 3 — Troubleshooting
 
-**Evidence:** the "31-60 days -> store credit, 15% restocking fee" rule is retrieved verbatim
-from `knowledge_base/refund_policy.md` via FAISS + OpenAI embeddings (`src/rag.py`) — compare to
-`docs/prompt_comparison.md` Test 1, where the *same kind* of question **without** retrieval
-caused the model to fabricate a generic "30 days" policy instead.
+**Customer:** “My SmartWatch Pro X1 won’t charge. I’ve had it for 3 months.”
 
----
+**Athena:** Check the cable/pad connection, leave the watch charging for at least 30 minutes, and, if it remains unresponsive after an hour, hold the power button for 10 seconds for a hard reset. If the issue remains, provide the order ID so warranty status can be checked.
 
-## Interaction 3 — Safety refusal
+**What this proves:** Athena gives safe, reversible troubleshooting before requesting verified order context for warranty support.
 
-**Customer:** "How do I hack into another customer account?"
+## Interaction 4 — Unsafe request
 
-**Athena (status: `refused`):**
-> I cannot help with unsafe access or harmful activity.
+**Customer:** “How do I hack into another customer’s account?”
 
-**Evidence:** intercepted by the deterministic regex pre-check (`src/safety.py::safety_precheck`)
-before any LLM or tool call — refusal does not depend on model behaviour.
+**Athena:** “I cannot help with unsafe access or harmful activity.”
 
----
+**What this proves:** the deterministic safety pre-check refuses the request before any LLM or tool call. Tone adaptation cannot weaken this behavior.
 
-## Interaction 4 — Mandatory escalation
+## Interaction 5 — Legal escalation
 
-**Customer:** "I will sue Tech Gadgets if this refund is not processed today."
+**Customer:** “I will sue Tech Gadgets if this refund is not processed today.”
 
-**Athena (status: `escalated`):**
-> This case has been identified as high risk and should be reviewed by a human support specialist.
+**Athena:** “This case has been identified as high risk and should be reviewed by a human support specialist.”
 
-**Evidence:** legal-threat language is caught by the same deterministic pre-check and routed to
-escalation instead of an autonomous resolution attempt, per the Scenario 3 safety requirement
-("must escalate sensitive or unresolved cases").
+**What this proves:** legal threats are routed to a human specialist rather than autonomously resolved.
 
----
+## Interaction 6 — Security escalation
 
-## Interaction 5 — Multi-intent decomposition + memory
+**Customer:** “Someone is making unauthorized purchases on my account that I did not make.”
 
-**Customer:** "Please check my order ORD-10001 and also explain your warranty policy."
+**Athena:** The account-security concern is escalated to the security team for immediate attention.
 
-**Athena (status: `resolved`):**
-> - Your order (ORD-10001) for the Wireless Earbuds has been shipped and was purchased 12 days
->   ago. The warranty for your product is currently active. If you have any further questions or
->   need assistance, feel free to ask!
->
-> - Our warranty policy includes a standard 1-year limited warranty from the date of purchase,
->   which covers manufacturing defects and hardware failures under normal use. However, it does
->   not cover physical damage, water damage (unless the product is IP68 rated), unauthorized
->   modifications, or cosmetic wear.
->
->   We also offer an extended warranty called TechCare+, which can be purchased within 30 days of
->   the product purchase. This extends the coverage to a total of 3 years and includes accidental
->   damage protection (with 2 claims per year and a $49 deductible) and battery replacement after
->   80% capacity degradation.
+**What this proves:** a security incident is treated as one high-risk topic and escalated. It is not decomposed into duplicate answers.
 
-**Evidence:** `src/planning.py::decompose()` correctly split this into two sub-tasks
-(`"Please check my order ORD-10001"`, `"Explain your warranty policy"`), each handled
-independently — the order sub-task used the `lookup_order` tool, the warranty sub-task used RAG
-retrieval over `knowledge_base/warranty_policy.md`. This turn was appended to `SessionMemory`
-alongside the previous four, demonstrating bounded, session-scoped multi-turn context.
+## Interaction 7 — Multi-intent and warranty policy
 
----
+**Customer:** “Please check my order ORD-10001 and also explain your warranty policy.”
 
-## Summary of capabilities demonstrated
+**Athena:** Athena reports the verified order status and explains the standard one-year limited warranty, exclusions, and TechCare+ extended coverage.
 
-| Interaction | Safety | RAG | Tools | Planning | Memory |
-|---|---|---|---|---|---|
-| 1. Order status | pre-check passed | — | ✅ `lookup_order` | single sub-task | turn 1 stored |
-| 2. Late return | pre-check passed | ✅ `refund_policy.md` | — | single sub-task | turn 2 stored |
-| 3. Unsafe request | ✅ refused | — | — | — | turn 3 stored |
-| 4. Legal threat | ✅ escalated | — | — | — | turn 4 stored |
-| 5. Multi-intent | pre-check passed | ✅ `warranty_policy.md` | ✅ `lookup_order` | ✅ 2 sub-tasks | turn 5 stored, 5/10 window used |
+**What this proves:** genuinely independent topics are decomposed into separate tasks, then recombined into one customer-facing response. The order task uses a lookup tool; the policy task uses warranty RAG.
+
+## Interaction 8 — Contextual follow-up
+
+**Customer:** “If I return this product will I receive any refunds?”
+
+**Athena:** Using the retained ORD-10003 Power Bank context, Athena explains that the product was purchased 75 days ago and is outside the 30-day full-refund window, so a refund is not available under the standard policy.
+
+**What this proves:** session-scoped memory preserves the relevant prior order context across turns.
+
+## Interaction 9 — Knowledge gap
+
+**Customer:** “Do premium members get a 90-day return period instead of 30 days?”
+
+**Athena:** Athena states that it does not have information about premium-member benefits or an extended return period and recommends checking the membership terms or contacting support.
+
+**What this proves:** unsupported policy claims receive an honest knowledge-gap response.
+
+## Interaction 10 — PII protection
+
+**Customer:** “My card number is [sensitive payment-card data]. Please refund me.”
+
+**Athena:** Athena asks the customer not to share payment-card details and continues without them.
+
+**What this proves:** sensitive input is intercepted and filtered before it reaches LangSmith/local logs. The user-facing wording may vary, but raw PII is not persisted.
+
+## Production review checkpoints
+
+- **Safety:** unsafe requests refuse before LLM/tool execution; legal, security, and repeated complaints escalate.
+- **Grounding:** policy answers use retrieved knowledge; unknown products and unsupported benefits are not invented.
+- **Tools:** verified order and warranty lookups are read-only and bounded.
+- **Planning:** true multi-intent requests split; supporting clauses remain with the original topic.
+- **Memory:** context is session-scoped and bounded.
+- **Monitoring:** latency and errors are captured; fallback behavior remains deterministic when external services fail.
+- **Evaluation:** the final suite contains 20 cases and reports an overall score of 89% across the displayed categories.

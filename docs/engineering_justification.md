@@ -1,203 +1,105 @@
-# Engineering & Product Justification
-
+# Engineering and Product Justification
 ## Athena — Tech Gadgets Inc. Customer Support Resolution Agent
 
----
+## Architecture
 
-### 1. Architecture Overview
-
-```
-                    Customer Input
-                          |
-                          v
-   Safety Pre-Check (deterministic regex, src/safety.py)
-   - PII detection (payment-card pattern)
-   - Unsafe-request keywords (hack, exploit, bypass security...)
-   - Legal / high-risk keywords (sue, lawyer, legal action)
-   - Returns immediately if triggered — no LLM/tool call is made
-                          |
-                          v (passes check)
-   Intent Decomposition (src/planning.py::decompose)
-   - real ChatOpenAI call, splits genuinely multi-topic requests
-   - single-topic / multi-sentence requests are kept as one sub-task
-                          |
-                          v (for each sub-task)
-   RAG Retrieval (src/rag.py) — real OpenAI embeddings (text-embedding-3-small)
-   in a FAISS vector store over chunked knowledge_base/*.md
-                          |
-                          v
-   LangChain Tool-Calling Agent (src/mcp_tools.py) — ChatOpenAI (gpt-4o-mini)
-   bound to lookup_order / check_warranty / escalate_to_human, grounded in the
-   retrieved policy context, bounded to settings.max_tool_iterations
-                          |
-                          v
-   Adaptive tone (src/adaptation.py) — feedback-derived tone/verbosity applied
-                          |
-                          v
-   Observability wrapper (src/observability.py::traced_run) — latency capture,
-   PII-safe log line, LangSmith tracing, graceful fallback to deterministic
-   src/runtime.py logic if the live call fails
-                          |
-                          v
-              Structured response returned to the customer
+```text
+Customer input
+    ↓
+Deterministic safety pre-check
+    ↓
+LLM-based intent decomposition
+    ↓
+RAG retrieval over versioned knowledge_base/*.md
+    ↓
+LangChain tool-calling agent
+    ↓
+Adaptive tone and bounded session memory
+    ↓
+Observability, sanitized logging, and fallback
+    ↓
+Structured customer response or human escalation
 ```
 
-Each Streamlit page under `pages/` isolates one layer of this pipeline for evaluator clarity
-(`pages/3_llm_integration.py` = plain LLM + prompt variants, `pages/4_rag.py` = retrieval only,
-`pages/5_mcp_tools.py` = tool-calling only, `pages/6_planning_memory.py` = the full composed
-pipeline with memory). `src/planning.py::run_agent_turn` is the single function that wires safety
-+ decomposition + retrieval + tools + memory + feedback together and is reused by Phases 6-9.
+The pre-check handles unsafe requests, high-risk escalation language, and sensitive payment information before the LLM/tool path. Passed requests are decomposed only when they contain genuinely independent topics. Each task receives relevant policy context and may use scoped read-only tools such as `lookup_order` or `check_warranty`. The full composition is reused by Phases 6–9.
 
----
+## Key decisions and trade-offs
 
-### 2. Design Decisions & Tradeoffs
+### LangChain single agent
 
-#### Decision 1: LangChain (Track A) over CrewAI or a framework-free build
+A single customer-support workflow needs one entity to triage, retrieve, call tools, and answer. LangChain provides `ChatOpenAI`, bound tools, FAISS integration, and LangSmith compatibility without hand-building function-call schemas. The trade-off is a larger dependency surface than a framework-free client.
 
-**Choice:** LangChain, single agent with bound tools (`ChatOpenAI.bind_tools`).
+### FAISS over a managed vector database
 
-**Why:**
-- Customer support here is a single-agent workflow — one entity triages, retrieves, and resolves.
-- LangChain's `ChatOpenAI` + `bind_tools` + `FAISS`/`OpenAIEmbeddings` integrations gave a real,
-  working RAG + tool-calling agent without hand-rolling function-calling JSON schemas.
-- LangSmith tracing is available out of the box via `LANGCHAIN_TRACING_V2=true`.
+The demonstration knowledge base is small Markdown content. An in-memory FAISS index avoids another service, is easy to reproduce locally, and is fast for the use case. A production system would persist and incrementally update the index as policy volume and change frequency grow.
 
-**Tradeoff accepted:** LangChain adds a dependency surface (and a Windows-specific FAISS/OpenMP
-issue, see §4) versus a minimal framework-free client. Justified by faster, more reliable
-tool-calling and retrieval code.
+### `gpt-4o-mini`
 
-#### Decision 2: FAISS (in-memory) over Chroma/Pinecone
+Tier-1 support benefits from consistent, low-latency, cost-conscious responses more than maximum reasoning depth. Temperature is kept low for predictable tool selection. Ambiguous, legal, security, and unresolved cases have an escalation path rather than relying on deeper autonomous reasoning.
 
-**Choice:** `langchain_community.vectorstores.FAISS`, rebuilt in-process from `knowledge_base/*.md`.
+### Deterministic safety before the LLM
 
-**Why:** the knowledge base is 5 small markdown files — an in-memory index is fast, has no
-external service dependency, and is trivial to reproduce with `streamlit run app.py`.
+Safety-critical refusals and escalation routes must not depend on probabilistic model behavior. Regex pre-checks run first, while prompt-level grounding and tool guardrails provide defense in depth. This design explains why all prompt variants produced the same unsafe-request refusal in the controlled comparison.
 
-**Tradeoff accepted:** the index is rebuilt on first use per process (cached after that) and is
-not persisted to disk; not suitable for a large, frequently-changing knowledge base. At that
-scale we would persist the index and add incremental updates.
+### LLM decomposition with explicit criteria
 
-#### Decision 3: `gpt-4o-mini`, temperature 0.3 (0 for tool-calling)
+A heuristic split on “and” is cheap but can split ordinary supporting clauses or miss topic changes. LLM decomposition handles natural language better, but it introduced a real failure: unauthorized-purchase language was split into duplicate security tasks. The prompt was corrected with explicit criteria and worked examples. Genuine multi-intent requests still split; single-topic clauses remain together.
 
-**Why:** consistent, low-cost, low-latency responses are more important than maximum reasoning
-depth for Tier-1 support; temperature 0 for the tool-calling agent makes tool selection
-deterministic and testable.
+### Bounded memory
 
-**Tradeoff accepted:** lower reasoning ceiling for very ambiguous cases — mitigated by the
-mandatory escalation path for legal/security/unresolved cases.
+`SessionMemory` retains a bounded recent window, supporting normal 3–8-turn customer sessions without unbounded token growth. A production deployment would use authenticated, persistent per-customer storage and a clear retention policy.
 
-#### Decision 4: Two-layer safety, deterministic layer first
+## Safety, privacy, and escalation
 
-**Choice:** a regex-based `safety_precheck()` (`src/safety.py`) runs before any LLM or tool call;
-prompt-level rules (`src/llm_agent.py`, `src/mcp_tools.py`) are a second layer.
-
-**Why:** refusal/escalation of known-unsafe or high-risk requests must not depend on
-non-deterministic LLM behaviour. This was verified directly in `docs/prompt_comparison.md` (Test
-2): all three prompt variants produced an identical refusal because the regex layer intercepted
-the request before the model ever saw it.
-
-**Tradeoff accepted:** regex patterns can miss creative/obfuscated unsafe phrasing — the prompt
-layer and RAG grounding are the second line of defense for those cases.
-
-#### Decision 5: LLM-based multi-intent decomposition, with a documented failure and fix
-
-**Choice:** `src/planning.py::decompose()` uses a real LLM call (not a keyword split) to decide
-whether a message contains multiple distinct topics.
-
-**Why:** a purely heuristic split (on "and"/commas) either over-splits ordinary sentences or
-misses topic changes phrased without a conjunction.
-
-**Real failure found and fixed during development** (see `docs/evaluation_report.md` §3 for full
-detail): the first version of the decomposition prompt over-split single-topic, multi-sentence
-messages (e.g. *"Someone is making unauthorized purchases on my account that I did not make."*)
-into two bogus sub-tasks. Fixed by rewriting the prompt with an explicit rule plus three
-input/output worked examples. Re-verified against `evaluation/dataset.json`: 100% pass after the
-fix, with genuine multi-intent requests still splitting correctly.
-
-**Tradeoff accepted:** decomposition costs one extra LLM call per turn versus a free heuristic
-split; acceptable given the correctness gain and `gpt-4o-mini`'s low latency/cost.
-
-#### Decision 6: Session-scoped rolling memory (10 turns) over full history
-
-**Choice:** `SessionMemory` (`src/planning.py`) keeps the last 10 user/assistant turns in
-`st.session_state`, with an explicit `reset()`.
-
-**Why:** typical support sessions are 3-8 turns; a bounded window avoids unbounded token growth
-and stale context, while an explicit reset gives a clean boundary between customer sessions.
-
-**Tradeoff accepted:** a customer referencing something from more than 10 turns ago will not be
-recalled; acceptable for a single-session support interaction, and memory is per Streamlit
-session (not shared across concurrent users), so a real deployment would add per-customer,
-persistent session storage.
-
----
-
-### 3. Safety Approach
-
-**Philosophy:** safety is a feature, enforced deterministically wherever possible, with the LLM
-as a second and third layer rather than the only line of defense.
-
-| Layer | Mechanism | File |
+| Layer | Mechanism | Purpose |
 |---|---|---|
-| 1. Pre-check | Regex: unsafe keywords, card-number pattern, legal/high-risk keywords | `src/safety.py` |
-| 2. Prompt rules | "Never fabricate", "escalate instead of guessing", intent/evidence/answer/next-step structure | `src/llm_agent.py`, `src/mcp_tools.py` |
-| 3. Tool guardrails | Read-only tools only; unverifiable order IDs return `not_found` (never guessed); bounded tool-call loop | `src/mcp_tools.py`, `src/config.py` (`max_tool_iterations`) |
+| Pre-check | Regex for unsafe terms, card patterns, legal/high-risk language | Refuse, protect, or escalate before LLM/tools |
+| Prompt/RAG | Never fabricate; state uncertainty; escalate instead of guessing | Improve grounded behavior |
+| Tool guardrails | Read-only tools, verified IDs, bounded iterations | Prevent unauthorized or invented actions |
+| Monitoring boundary | Sanitization before local/LangSmith logging | Keep raw PII out of traces |
 
-**Escalation triggers (automatic, deterministic):** legal-action language ("sue", "lawyer",
-"legal action", "complaint"), which the pre-check catches before any model call.
+Legal threats, unauthorized-purchase incidents, and repeated unresolved complaints are escalation cases. Athena does not autonomously execute irreversible financial or account actions. Safety refusals remain active when tone adaptation is enabled.
 
-**PII-safe logging:** `sanitize_for_log()` hashes emails, phone numbers, and order IDs
-(SHA-256, truncated) before anything reaches `logs/`; full conversation content and raw
-identifiers are never written to disk.
+## Reliability and graceful degradation
 
----
+| Failure | Behavior |
+|---|---|
+| Missing LLM key/API failure | Offline status or deterministic fallback |
+| Embedding failure | Keyword-overlap retrieval fallback |
+| Tool failure | Error/offline status with bounded loop |
+| Decomposition failure | Heuristic `and` split fallback |
+| Tone adaptation failure | Professional default |
+| Monitoring exception | Sanitized deterministic runtime fallback |
+| Per-case evaluation crash | Record case error; continue suite |
+| LangSmith unavailable | Local-only metrics and informational status |
 
-### 4. Deployment Assumptions & Limitations
+These fallbacks ensure that an infrastructure failure does not become a raw exception shown to a customer.
 
-**Assumptions:**
-- OpenAI API key and quota are available (configured via `.env` locally, Streamlit Cloud
-  **Secrets** in production — never committed to the repository).
-- The knowledge base (`knowledge_base/*.md`) is maintained by the support-ops team and re-indexed
-  automatically the first time it is used in a running process.
-- A human escalation queue exists for the cases the agent explicitly routes to escalation.
+## Evaluation evidence
 
-**Current limitations:**
-- No real order/CRM database — `src/demo_data.py` provides mock orders for demonstration.
-- No authentication/authorization layer; a production deployment would add per-customer session
-  identity instead of a single Streamlit session.
-- LangSmith trace ingestion to the configured regional endpoint
-  (`https://apac.smith.langchain.com`) currently returns **HTTP 405** — likely an account/plan
-  limitation on that endpoint, not a code defect. `LANGCHAIN_TRACING_V2` remains enabled per the
-  assignment's monitoring requirement; local latency/error capture in
-  `src/observability.py::traced_run` is the primary observability evidence until this is resolved.
-- On Windows, `faiss-cpu` and `numpy` can link two OpenMP runtimes and crash on import; this is
-  worked around with `os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")` in `src/config.py`
-  (documented here so it is not accidentally removed).
-- No rate limiting beyond the tool-call iteration cap.
-- English-only support; feedback adaptation is per-session, not a persisted model update.
+The final evaluation suite contains **20 test cases** and reports an overall score of **89%** across the displayed categories: normal resolution 90%, safety refusal 93%, escalation 100%, edge cases 80%, knowledge gap 90%, and multi-turn 85%.
 
-**Production readiness checklist:**
-- [x] Real LLM/RAG/tool integration (LangChain + OpenAI + FAISS), not a simulation
-- [x] Two-layer deterministic + prompt-level safety, with a bounded tool-call loop
-- [x] PII-safe logging
-- [x] Configurable via environment variables / Streamlit secrets
-- [x] Reproducible (`requirements.txt`, this document, clear run instructions in `README.md`)
-- [x] Latency/error capture and graceful degradation to deterministic fallback logic
-- [ ] Authentication (would add for production)
-- [ ] Per-customer persistent session storage (would add for production)
-- [ ] Full LangSmith trace visibility (blocked on the 405 above)
-- [ ] Load testing
+The strongest engineering evidence is the reproduced decomposition defect and fix. Before the fix, the unauthorized-purchases sentence produced two duplicate tasks. After the prompt rewrite, it produces one task, while “check my order and explain warranty policy” still produces two independent tasks. Additional evidence includes the correctly handled 45-day return tier, invalid order refusal to fabricate, contextual follow-up, safety refusal, legal/security escalation, knowledge gaps, and PII filtering before LangSmith.
 
----
+## Deployment assumptions and limitations
 
-### 5. Evolution Summary
+- Demonstration order data is mocked; production needs authenticated CRM/order integrations.
+- Authentication and authorization are not implemented in the Streamlit demo.
+- Persistent customer sessions, rate limits, load testing, and operational dashboards remain production work.
+- English is the supported language.
+- LangSmith availability may vary by endpoint/account; local sanitized metrics remain the fallback.
+- The knowledge base must be versioned and maintained by Customer Support Operations.
 
-| Phase | What changed | Why |
+## Phase evolution
+
+| Phase | Change | Reason |
 |---|---|---|
-| 2 -> 3 | Keyword/template rules -> real `ChatOpenAI` call behind 3 versioned prompts | Handle natural language, nuance, and uncertainty instead of rigid keyword matching |
-| 3 -> 4 | Ungrounded LLM answers -> real OpenAI-embeddings + FAISS retrieval | Eliminate hallucination on policy questions (see the real fabrication example in `docs/prompt_comparison.md` Test 1) |
-| 4 -> 5 | Passive answers -> LangChain tool-calling agent (`bind_tools`) | Actually resolve issues via read-only order/warranty lookups and escalation, with loop guards |
-| 5 -> 6 | Single-shot -> LLM-based decomposition + bounded session memory | Handle multi-intent requests and multi-turn conversations; a real over-splitting bug was found and fixed here |
-| 6 -> 7 | Static tone -> feedback-derived tone/verbosity adjustment | Adapt to customer sentiment without retraining the model |
-| 7 -> 8 | Direct calls -> `traced_run` wrapper with latency capture and fallback | Deployment-safe: never surface a raw error to a customer |
-| 8 -> 9 | Manual spot checks -> `run_evaluation` test harness over `evaluation/dataset.json` | Repeatable, real (not simulated) quality/safety measurement with a documented root-cause fix |
+| 2 → 3 | Rules to real LLM prompts | Handle natural language and nuance |
+| 3 → 4 | Ungrounded answers to RAG | Reduce policy hallucination |
+| 4 → 5 | Answers to scoped tool calls | Verify order and warranty facts |
+| 5 → 6 | Single-shot to planning and memory | Handle multi-intent and follow-up context |
+| 6 → 7 | Static tone to feedback adaptation | Improve customer experience without retraining |
+| 7 → 8 | Direct calls to tracing and fallback | Capture latency and survive failures |
+| 8 → 9 | Spot checks to a 20-case suite | Measure quality, safety, escalation, and regressions |
+
+Athena is therefore not justified as “an LLM chatbot.” It is justified as a layered support operating capability in which deterministic controls, grounded knowledge, verified tools, bounded planning, observability, and human escalation each address a different operational risk.

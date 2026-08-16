@@ -127,7 +127,7 @@ and always has an escalation path to a human specialist.
 | Priority | Improvement | Expected impact |
 |---|---|---|
 | High | Add a semantic-similarity groundedness check (compare answer embedding to retrieved-source embedding) instead of only keyword checks in `run_evaluation` | Catch subtler hallucinations the current keyword check would miss |
-| High | Fix the LangSmith trace-ingestion 405 (see `docs/engineering_justification.md`, Phase 8) so traces are visible on smith.langchain.com | Full observability, not just local latency logs |
+| Medium | Add trace-level cost alerts and retention monitoring | Keep observability useful as traced traffic grows |
 | Medium | Expand `evaluation/dataset.json` beyond 10 cases, including multi-turn memory-retention tests | Broader regression coverage |
 | Medium | Add confidence scores surfaced to the customer for low-certainty answers | Increased trust and transparency |
 | Low | Multilingual support | Serve non-English-speaking customers |

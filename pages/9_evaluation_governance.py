@@ -9,7 +9,7 @@ import html
 import json
 import streamlit as st
 from src.evaluation import get_evaluation_summary, run_evaluation
-from src.observability import _langsmith_available, get_langsmith_project_runs, run_with_langsmith_tracing
+from src.observability import _langsmith_available, get_langsmith_project_runs, run_with_trace_metadata
 from src.config import settings
 from src.planning import SessionMemory, run_agent_turn
 from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
@@ -63,7 +63,16 @@ def _phase9_insights(result: dict) -> list[str]:
     extra.append("<b>Governance:</b> Every response is grounded, tool-verified, PII-safe, and traceable")
 
     # LangSmith status
-    if langsmith_configured:
+    if result.get("status") == "protected":
+        extra.append(
+            "<b>ℹ LangSmith:</b> No trace was created because this request contained payment-card "
+            "information. The safety check handled it locally to keep that data out of LangSmith."
+        )
+    elif langsmith_configured:
+        if result.get("trace_url"):
+            extra.append(
+                f'<b>Current trace:</b> <a href="{result["trace_url"]}" target="_blank">View this response</a>'
+            )
         extra.append("<b>🔗 LangSmith:</b> This response was traced — view project dashboard below for analytics")
     else:
         extra.append("<b>ℹ LangSmith:</b> Not configured — using local evaluation only")
@@ -103,7 +112,7 @@ def _render_langsmith_runs(runs: list[dict]) -> None:
 
 render_chat(
     session_key="phase9_chat",
-    reply_fn=lambda msg: run_with_langsmith_tracing(run_agent_turn, msg, memory=memory),
+    reply_fn=lambda msg: run_with_trace_metadata(run_agent_turn, msg, memory=memory),
     evidence_fn=_evidence,
     placeholder="Try any support question — this is the fully composed, production-reviewed agent",
     suggestions={

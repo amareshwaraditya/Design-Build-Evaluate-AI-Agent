@@ -6,8 +6,8 @@ to local-only metrics when LangSmith is unavailable or API key is missing/invali
 
 import os
 import time
-import uuid
 from contextlib import nullcontext
+from datetime import datetime, timedelta, timezone
 
 from .config import settings
 from .safety import sanitize_for_log
@@ -44,41 +44,64 @@ def run_with_langsmith_tracing(function, *args, **kwargs):
         return function(*args, **kwargs)
 
 
-def _get_langsmith_trace_url(run_id: str) -> str | None:
-    """Attempt to retrieve the LangSmith trace URL for a given run.
-
-    Returns None if LangSmith is unavailable or the lookup fails.
-    """
-    if not _langsmith_available():
-        return None
+def _trace_metadata(tracer, started_at: datetime) -> tuple[str | None, dict | None]:
+    """Return metadata for this request's root run, never a stale project run."""
+    run = getattr(tracer, "latest_run", None) if tracer is not None else None
+    client = _langsmith_client()
+    if run is None:
+        earliest_start = started_at - timedelta(seconds=5)
+        for _ in range(5):
+            try:
+                recent_runs = list(client.list_runs(
+                    project_name=settings.langsmith_project,
+                    is_root=True,
+                    limit=5,
+                ))
+                candidates = [
+                    candidate for candidate in recent_runs
+                    if getattr(candidate, "start_time", None) and candidate.start_time >= earliest_start
+                ]
+                if candidates:
+                    run = max(candidates, key=lambda candidate: candidate.start_time)
+                    break
+            except Exception:
+                break
+            time.sleep(0.5)
+    if run is None:
+        return None, None
     try:
-        client = _langsmith_client()
-        run = client.read_run(run_id)
-        return run.url if run else None
+        trace_url = client.get_run_url(run=run, project_name=settings.langsmith_project)
     except Exception:
-        return None
-
-
-def _get_langsmith_run_stats(run_id: str) -> dict | None:
-    """Retrieve token usage and cost from LangSmith for a traced run.
-
-    Returns None if LangSmith is unavailable or lookup fails.
-    """
-    if not _langsmith_available():
-        return None
+        trace_url = None
     try:
-        client = _langsmith_client()
-        run = client.read_run(run_id)
-        if run:
-            return {
-                "total_tokens": run.total_tokens or 0,
-                "prompt_tokens": run.prompt_tokens or 0,
-                "completion_tokens": run.completion_tokens or 0,
-                "total_cost": getattr(run, "total_cost", None),
-            }
-        return None
+        run = client.read_run(run.id)
+        stats = {
+            "total_tokens": run.total_tokens or 0,
+            "prompt_tokens": run.prompt_tokens or 0,
+            "completion_tokens": run.completion_tokens or 0,
+            "total_cost": getattr(run, "total_cost", None),
+        }
     except Exception:
-        return None
+        stats = None
+    return trace_url, stats
+
+
+def run_with_trace_metadata(function, *args, **kwargs) -> dict:
+    """Run an agent call and attach the URL of its actual LangSmith root trace."""
+    started_at = datetime.now(timezone.utc)
+    tracer = None
+    if _langsmith_available():
+        with langsmith_tracing_scope() as tracer:
+            result = function(*args, **kwargs)
+    else:
+        result = function(*args, **kwargs)
+    trace_url, langsmith_stats = _trace_metadata(tracer, started_at)
+    return {
+        **result,
+        "trace_url": trace_url,
+        "langsmith_stats": langsmith_stats,
+        "langsmith_enabled": _langsmith_available(),
+    }
 
 
 def traced_run(function, message: str, **kwargs) -> dict:
@@ -96,22 +119,20 @@ def traced_run(function, message: str, **kwargs) -> dict:
         Dict with keys: result, latency_ms, logged_message, error, trace_url, langsmith_stats.
     """
     started = time.perf_counter()
-    run_id = str(uuid.uuid4())
-
-    # Inject LangSmith run ID as metadata if tracing is enabled
-    if _langsmith_available():
-        os.environ.setdefault("LANGCHAIN_RUN_ID", run_id)
-
+    trace_started_at = datetime.now(timezone.utc)
     try:
-        result = run_with_langsmith_tracing(function, message, **kwargs)
+        tracer = None
+        if _langsmith_available():
+            with langsmith_tracing_scope() as tracer:
+                result = function(message, **kwargs)
+        else:
+            result = function(message, **kwargs)
         if isinstance(result, dict) and result.get("status") == "error":
             raise RuntimeError(result.get("error", "live agent error"))
 
         latency_ms = round((time.perf_counter() - started) * 1000, 2)
 
-        # Attempt to retrieve LangSmith trace info (non-blocking)
-        trace_url = _get_langsmith_trace_url(run_id)
-        langsmith_stats = _get_langsmith_run_stats(run_id)
+        trace_url, langsmith_stats = _trace_metadata(tracer, trace_started_at)
 
         return {
             "result": result,
@@ -136,9 +157,6 @@ def traced_run(function, message: str, **kwargs) -> dict:
             "langsmith_stats": None,
             "langsmith_enabled": _langsmith_available(),
         }
-    finally:
-        # Clean up injected run ID to avoid leaking across requests
-        os.environ.pop("LANGCHAIN_RUN_ID", None)
 
 
 def _langsmith_client():

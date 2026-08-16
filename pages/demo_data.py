@@ -2,7 +2,7 @@
 
 import streamlit as st
 
-from src.demo_data import ORDERS
+from src.demo_data import load_orders
 
 
 st.set_page_config(page_title="Athena - Demo Data", page_icon="🗂️", layout="wide")
@@ -24,7 +24,7 @@ order_rows = [
         "Purchased": f"{order['purchase_days_ago']} days ago",
         "Warranty": order["warranty"],
     }
-    for order_id, order in ORDERS.items()
+    for order_id, order in load_orders().items()
 ]
 st.table(order_rows)
 

@@ -15,8 +15,8 @@ def search_policies(query, policies, top_k=3):
 def return_guidance(order_id=None):
     if not order_id:
         return "Our documented policy allows eligible returns within 30 days. I need an order ID to check an order-specific case."
-    from .demo_data import ORDERS
-    order = ORDERS.get(order_id.upper())
+    from .demo_data import get_order
+    order = get_order(order_id)
     if not order:
         return "I could not verify that order ID. I will not guess its status; please check the ID or request human support."
     if order["purchase_days_ago"] <= 30:

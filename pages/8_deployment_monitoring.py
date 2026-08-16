@@ -7,12 +7,16 @@ and automatic fallback to deterministic logic on LLM failure.
 import streamlit as st
 from src.config import settings
 from src.observability import _langsmith_available, traced_run, get_langsmith_project_runs
-from src.planning import run_agent_turn
+from src.planning import SessionMemory, run_agent_turn
 from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
 st.set_page_config(page_title="Athena - Monitored Service", page_icon="📡", layout="wide")
 phase_carousel(8)
 chat_header("Phase 8 — this is the same monitored request path used by the deployed service.")
+
+if "phase8_memory" not in st.session_state:
+    st.session_state.phase8_memory = SessionMemory()
+memory: SessionMemory = st.session_state.phase8_memory
 
 # Service status panel
 with st.expander("Service status", expanded=False):
@@ -35,7 +39,7 @@ with st.expander("Service status", expanded=False):
 
 def _reply(message: str) -> dict:
     """Run a fully monitored agent turn with observability wrapper."""
-    run = traced_run(run_agent_turn, message)
+    run = traced_run(run_agent_turn, message, memory=memory)
     inner = run["result"]
     answer = inner.get("answer") if isinstance(inner, dict) else str(inner)
     return {

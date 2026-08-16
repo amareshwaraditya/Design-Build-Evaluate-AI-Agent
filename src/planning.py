@@ -6,9 +6,18 @@ Provides:
 - run_agent_turn(): full pipeline orchestrator (safety → decompose → RAG → tools → memory).
 """
 
+import re
+
 from .config import settings
 from .rag import retrieve
 from .safety import safety_precheck
+
+
+_ORDER_ID_PATTERN = re.compile(r"\bORD-\d+\b", flags=re.IGNORECASE)
+_CONTEXTUAL_ORDER_REFERENCE = re.compile(
+    r"\b(?:this|that)\s+(?:product|order|item)\b|\bmy\s+(?:previous|last)\s+order\b",
+    flags=re.IGNORECASE,
+)
 
 
 def decompose(message: str) -> list[str]:
@@ -66,6 +75,16 @@ class SessionMemory:
     def as_chat_history(self) -> str:
         return "\n".join(f"Customer: {t['user']}\nAthena: {t['assistant']}" for t in self.turns)
 
+    def resolve_contextual_order_id(self, message: str) -> str | None:
+        """Return the latest prior order ID for an unambiguous follow-up reference."""
+        if _ORDER_ID_PATTERN.search(message) or not _CONTEXTUAL_ORDER_REFERENCE.search(message):
+            return None
+        for turn in reversed(self.turns):
+            match = _ORDER_ID_PATTERN.search(turn["user"])
+            if match:
+                return match.group(0).upper()
+        return None
+
 
 def run_agent_turn(message: str, memory: "SessionMemory | None" = None, feedback: dict | None = None) -> dict:
     """The full pipeline: safety → decomposition → per-intent RAG + tool-calling answer → memory update.
@@ -96,12 +115,20 @@ def run_agent_turn(message: str, memory: "SessionMemory | None" = None, feedback
         return {"status": status, "answer": answer, "sub_tasks": [message]}
 
     sub_tasks = decompose(message)
+    history = memory.as_chat_history() if memory is not None else ""
+    contextual_order_id = memory.resolve_contextual_order_id(message) if memory is not None else None
     answers = []
     for sub_task in sub_tasks:
         try:
             passages = retrieve(sub_task, top_k=2)
             context = "\n\n".join(f"[{p['source']}] {p['text']}" for p in passages)
-            response = run_tool_agent(sub_task, context=context, feedback=feedback)
+            response = run_tool_agent(
+                sub_task,
+                context=context,
+                feedback=feedback,
+                conversation_history=history,
+                contextual_order_id=contextual_order_id,
+            )
             answers.append({
                 "sub_task": sub_task,
                 "status": response["status"],

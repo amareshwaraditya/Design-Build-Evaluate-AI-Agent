@@ -2,7 +2,7 @@
 import re
 
 from .config import settings
-from .demo_data import ORDERS
+from .demo_data import get_order
 
 TOOLS = {
     "lookup_order": "Read-only lookup of order status using an order ID.",
@@ -15,24 +15,24 @@ def call_tool(name: str, arguments: dict) -> dict:
     """Direct, scoped tool execution (used for manual demos and as the agent's tool implementation)."""
     if name == "lookup_order":
         order_id = str(arguments.get("order_id", "")).upper()
-        order = ORDERS.get(order_id)
+        order = get_order(order_id)
         return order or {"status": "not_found", "message": "Order could not be verified. I will not guess its status."}
     if name == "check_warranty":
         order_id = str(arguments.get("order_id", "")).upper()
-        order = ORDERS.get(order_id)
+        order = get_order(order_id)
         return {"warranty": order["warranty"]} if order else {"status": "not_found"}
     if name == "escalate_to_human":
         return {"status": "escalation_recommended", "reason": arguments.get("reason", "unresolved case")}
     return {"status": "tool_not_allowed", "message": f"'{name}' is not in the approved tool list."}
 
 
-def verify_referenced_order(message: str) -> dict | None:
-    """Verify an explicit order ID before producing an order-specific answer."""
+def verify_referenced_order(message: str, contextual_order_id: str | None = None) -> dict | None:
+    """Verify an explicit or safely resolved contextual order ID before giving order guidance."""
     match = re.search(r"\bORD-\d+\b", message, flags=re.IGNORECASE)
-    if not match:
+    order_id = match.group(0).upper() if match else contextual_order_id
+    if not order_id:
         return None
 
-    order_id = match.group(0).upper()
     return {
         "order_id": order_id,
         "tool": "lookup_order",
@@ -65,9 +65,15 @@ def _build_tools():
     }
 
 
-def run_tool_agent(message: str, context: str = "", feedback: dict | None = None) -> dict:
+def run_tool_agent(
+    message: str,
+    context: str = "",
+    feedback: dict | None = None,
+    conversation_history: str = "",
+    contextual_order_id: str | None = None,
+) -> dict:
     """Let a real LLM choose and call tools, bounded by max_tool_iterations to prevent loops."""
-    verification = verify_referenced_order(message)
+    verification = verify_referenced_order(message, contextual_order_id=contextual_order_id)
     if verification and verification["result"].get("status") == "not_found":
         order_id = verification["order_id"]
         return {
@@ -109,14 +115,18 @@ def run_tool_agent(message: str, context: str = "", feedback: dict | None = None
     system = (
         "You are Athena, a Tech Gadgets Inc. support agent with read-only tools: lookup_order, check_warranty, "
         "and escalate_to_human. Call a tool only when the customer supplies information the tool needs "
-        "(such as an order ID). Never invent an order ID or policy detail. If no order ID is given, ask for "
-        "one instead of calling a tool. Ground policy answers only in the context below; if it does not "
+        "(such as an order ID) in this message or an unambiguous prior turn. Never invent an order ID or "
+        "policy detail. If no order ID is given and conversation context does not unambiguously identify one, "
+        "ask for one instead of calling a tool. Ground policy answers only in the context below; if it does not "
         "answer the question, say so explicitly."
         + (
-            f" The order ID {verification['order_id']} has already been verified via lookup_order; "
-            "do not claim anything beyond the verified record and supplied policy context."
+            f" The order ID {verification['order_id']} has already been verified via lookup_order: "
+            f"{verification['result']}. Use it only for this customer's follow-up and do not claim anything "
+            "beyond this record and the supplied policy context."
             if verification else ""
         )
+        + ("\n\nConversation history (use only for unambiguous follow-ups):\n" + conversation_history
+           if conversation_history else "")
         + "\n\nPolicy context:\n" + (context or "(no relevant policy passage retrieved)")
         + tone_instruction
     )

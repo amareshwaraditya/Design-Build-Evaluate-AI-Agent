@@ -11,12 +11,16 @@ import streamlit as st
 from src.evaluation import get_evaluation_summary, run_evaluation
 from src.observability import _langsmith_available, get_langsmith_project_runs, run_with_langsmith_tracing
 from src.config import settings
-from src.planning import run_agent_turn
+from src.planning import SessionMemory, run_agent_turn
 from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
 st.set_page_config(page_title="Athena - Production Review", page_icon="✅", layout="wide")
 phase_carousel(9)
 chat_header("Phase 9 — this final version has been tested end-to-end for quality, safety, and governance.")
+
+if "phase9_memory" not in st.session_state:
+    st.session_state.phase9_memory = SessionMemory()
+memory: SessionMemory = st.session_state.phase9_memory
 
 # Service & tracing status panel
 with st.expander("Evaluation environment status", expanded=False):
@@ -99,7 +103,7 @@ def _render_langsmith_runs(runs: list[dict]) -> None:
 
 render_chat(
     session_key="phase9_chat",
-    reply_fn=lambda msg: run_with_langsmith_tracing(run_agent_turn, msg),
+    reply_fn=lambda msg: run_with_langsmith_tracing(run_agent_turn, msg, memory=memory),
     evidence_fn=_evidence,
     placeholder="Try any support question — this is the fully composed, production-reviewed agent",
     suggestions={

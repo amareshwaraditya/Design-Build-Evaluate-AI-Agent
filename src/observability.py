@@ -126,7 +126,7 @@ def traced_run(function, message: str, **kwargs) -> dict:
         # Graceful degradation: never surface raw errors to the customer
         from .runtime import answer as fallback_answer
 
-        fallback = fallback_answer(message)
+        fallback = fallback_answer(message, memory=kwargs.get("memory"))
         return {
             "result": {"status": "degraded", "answer": fallback["response"]},
             "latency_ms": round((time.perf_counter() - started) * 1000, 2),

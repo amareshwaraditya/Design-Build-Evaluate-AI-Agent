@@ -1,6 +1,6 @@
 import streamlit as st
 from src.adaptation import FeedbackPolicy, before_after
-from src.planning import run_agent_turn
+from src.planning import SessionMemory, run_agent_turn
 from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
 st.set_page_config(page_title="Athena - Feedback Learning", page_icon="💬", layout="wide")
@@ -11,7 +11,10 @@ if "phase7_feedback" not in st.session_state:
     st.session_state.phase7_feedback = FeedbackPolicy()
 if "phase7_selected_rating" not in st.session_state:
     st.session_state.phase7_selected_rating = None
+if "phase7_memory" not in st.session_state:
+    st.session_state.phase7_memory = SessionMemory()
 policy: FeedbackPolicy = st.session_state.phase7_feedback
+memory: SessionMemory = st.session_state.phase7_memory
 
 st.markdown("#### How it works")
 st.markdown(
@@ -87,7 +90,7 @@ def _evidence(result: dict) -> None:
 
 render_chat(
     session_key="phase7_chat",
-    reply_fn=lambda msg: run_agent_turn(msg, feedback=policy.instructions()),
+    reply_fn=lambda msg: run_agent_turn(msg, memory=memory, feedback=policy.instructions()),
     evidence_fn=_evidence,
     placeholder="Ask a support question, then rate the response using the stars above",
     suggestions={

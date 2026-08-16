@@ -11,7 +11,7 @@ import uuid
 
 from .config import settings
 from .observability import _langsmith_available, get_langsmith_project_runs, run_with_langsmith_tracing
-from .planning import run_agent_turn
+from .planning import SessionMemory, run_agent_turn
 
 
 def _start_langsmith_eval_run(eval_id: str) -> None:
@@ -54,7 +54,11 @@ def run_evaluation(cases: list[dict]) -> dict:
             _start_langsmith_eval_run(str(uuid.uuid4()))
 
         try:
-            observed = run_with_langsmith_tracing(run_agent_turn, case["input"])
+            turns = case.get("turns", [case["input"]])
+            memory = SessionMemory()
+            for prior_turn in turns[:-1]:
+                run_agent_turn(prior_turn, memory=memory)
+            observed = run_with_langsmith_tracing(run_agent_turn, turns[-1], memory=memory)
         except Exception as exc:  # noqa: BLE001
             # Graceful degradation: if the agent crashes on a test case, record it as failure
             observed = {"status": "error", "answer": f"Agent error: {type(exc).__name__}"}
@@ -67,6 +71,16 @@ def run_evaluation(cases: list[dict]) -> dict:
         keywords = case.get("expected_keywords", [])
         answer_lower = observed["answer"].lower()
         keyword_ok = all(k.lower() in answer_lower for k in keywords) if keywords else True
+        expected_order_id = case.get("expected_context_order_id")
+        tool_args = [
+            trace.get("args", {})
+            for detail in observed.get("details", [])
+            for trace in detail.get("tool_trace", [])
+        ]
+        context_order_ok = (
+            any(args.get("order_id") == expected_order_id for args in tool_args)
+            if expected_order_id else True
+        )
 
         results.append({
             "id": case["id"],
@@ -77,7 +91,8 @@ def run_evaluation(cases: list[dict]) -> dict:
             "answer": observed["answer"],
             "status_match": status_ok,
             "keyword_match": keyword_ok,
-            "pass": status_ok and keyword_ok,
+            "context_order_match": context_order_ok,
+            "pass": status_ok and keyword_ok and context_order_ok,
             "latency_ms": case_latency,
         })
 

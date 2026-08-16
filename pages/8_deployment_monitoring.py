@@ -7,12 +7,16 @@ and automatic fallback to deterministic logic on LLM failure.
 import streamlit as st
 from src.config import settings
 from src.observability import _langsmith_available, traced_run, get_langsmith_project_runs
-from src.planning import run_agent_turn
+from src.planning import SessionMemory, run_agent_turn
 from src.ui import chat_header, evaluation_box, phase_carousel, render_chat
 
 st.set_page_config(page_title="Athena - Monitored Service", page_icon="📡", layout="wide")
 phase_carousel(8)
 chat_header("Phase 8 — this is the same monitored request path used by the deployed service.")
+
+if "phase8_memory" not in st.session_state:
+    st.session_state.phase8_memory = SessionMemory()
+memory: SessionMemory = st.session_state.phase8_memory
 
 # Service status panel
 with st.expander("Service status", expanded=False):
@@ -35,17 +39,21 @@ with st.expander("Service status", expanded=False):
 
 def _reply(message: str) -> dict:
     """Run a fully monitored agent turn with observability wrapper."""
-    run = traced_run(run_agent_turn, message)
+    run = traced_run(run_agent_turn, message, memory=memory)
     inner = run["result"]
     answer = inner.get("answer") if isinstance(inner, dict) else str(inner)
+    status = inner.get("status", "resolved") if isinstance(inner, dict) else "resolved"
+    trace_suppressed = status in {"protected", "refused", "escalated"}
     return {
         "answer": answer,
+        "status": status,
         "latency_ms": run["latency_ms"],
         "logged_message": run["logged_message"],
         "error": run["error"],
         "trace_url": run.get("trace_url"),
         "langsmith_stats": run.get("langsmith_stats"),
         "langsmith_enabled": run.get("langsmith_enabled", False),
+        "trace_suppressed": trace_suppressed,
     }
 
 
@@ -53,9 +61,12 @@ def _phase8_insights(result: dict) -> list[str]:
     """Generate success/limitation notes for Phase 8 evaluation box."""
     extra = [f"<b>Sanitized log:</b> <code>{result['logged_message']}</code>"]
     latency = result.get("latency_ms", 0)
+    status = result.get("status", "resolved")
 
     # Error/degradation handling
-    if result.get("error"):
+    if result.get("trace_suppressed"):
+        extra.append("<b>✓ Safety:</b> Request handled locally before any LLM, tool, or LangSmith tracing call")
+    elif result.get("error"):
         extra.append(f"<b>⚠ Degraded:</b> Fell back to deterministic logic — {result['error']}")
         extra.append("<b>✓ Resilience:</b> Customer received a valid response despite backend failure (graceful degradation)")
     else:
@@ -75,7 +86,15 @@ def _phase8_insights(result: dict) -> list[str]:
         extra.append("<b>✓ PII-safe:</b> No raw emails, phone numbers, or order IDs in logged output")
 
     # LangSmith trace info
-    if result.get("langsmith_enabled"):
+    if result.get("trace_suppressed"):
+        if status == "protected":
+            extra.append(
+                "<b>ℹ LangSmith:</b> No trace was created because this request contained payment-card "
+                "information. The safety check handled it locally to keep that data out of LangSmith."
+            )
+        else:
+            extra.append("<b>ℹ LangSmith:</b> No trace was created because the safety pre-check handled this request locally.")
+    elif result.get("langsmith_enabled"):
         trace_url = result.get("trace_url")
         stats = result.get("langsmith_stats")
         if trace_url:
@@ -116,6 +135,9 @@ render_chat(
 with st.expander("LangSmith project dashboard (recent runs)"):
     dashboard = get_langsmith_project_runs(limit=5)
     runs = dashboard["runs"]
+    last_evidence = st.session_state.get("phase8_chat", [{}])[-1].get("evidence", {}) if st.session_state.get("phase8_chat") else {}
+    if last_evidence.get("trace_suppressed"):
+        st.caption("The latest sensitive request was intentionally handled before tracing. The runs below are earlier non-sensitive requests.")
     if runs:
         st.table({
             "Run": [r["name"] or "—" for r in runs],

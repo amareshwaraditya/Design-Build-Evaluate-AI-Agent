@@ -1,7 +1,7 @@
 import hashlib
 import re
 import time
-from .demo_data import ORDERS
+from .demo_data import get_order
 from .policies import return_guidance
 
 UNSAFE = ("hack", "exploit", "steal", "bypass security", "access another account")
@@ -43,26 +43,37 @@ def answer(message, context="", live=False, memory=None, feedback=None):
     if safety["status"] == "escalated": return result(message, "escalated", "This case has been identified as high risk and should be reviewed by a human support specialist.", started, safety=safety)
     intent = classify(message)
     order_id = extract_order_id(message)
+    if not order_id and memory is not None and hasattr(memory, "resolve_contextual_order_id"):
+        order_id = memory.resolve_contextual_order_id(message)
     if intent == "return_refund": response = return_guidance(order_id)
     elif intent == "order_status" and order_id:
-        order = ORDERS.get(order_id)
+        order = get_order(order_id)
         response = f"{order_id}: {order['product']} is {order['status']}." if order else "I could not verify that order ID. I will not invent a status; please check the ID or request human support."
     elif intent == "warranty" and order_id:
-        order = ORDERS.get(order_id)
+        order = get_order(order_id)
         response = f"{order_id}: warranty status is {order['warranty']}." if order else "I could not verify that order ID, so I cannot confirm warranty coverage."
     elif intent == "account_security": response = "For account-security concerns, do not share passwords or payment details. I recommend immediate human escalation."
     else: response = "I can help with that. Please provide an order ID or more detail so I can verify the correct policy or next step."
     if feedback and feedback.get("tone") == "empathetic": response = "I understand this is frustrating. " + response
-    return result(message, "resolved", response, started, safety=safety, intent=intent, retrieved=bool(context), memory_turns=len(memory or []))
+    return result(
+        message,
+        "resolved",
+        response,
+        started,
+        safety=safety,
+        intent=intent,
+        retrieved=bool(context),
+        memory_turns=len(getattr(memory, "turns", memory or [])),
+    )
 
 def result(message, status, response, started, **extra):
     return {"status": status, "response": response, "latency_ms": round((time.perf_counter()-started)*1000, 2), "logged_message": sanitize(message), **extra}
 
 def tool_call(name, args):
     order_id = args.get("order_id", "").upper()
-    if name == "lookup_order": return {"tool": name, "result": ORDERS.get(order_id, {"status": "not_found"})}
+    if name == "lookup_order": return {"tool": name, "result": get_order(order_id) or {"status": "not_found"}}
     if name == "check_warranty":
-        order = ORDERS.get(order_id)
+        order = get_order(order_id)
         return {"tool": name, "result": {"warranty": order["warranty"]} if order else {"status": "not_found"}}
     if name == "escalate_to_human": return {"tool": name, "result": {"status": "escalation_created", "reason": args.get("reason", "unresolved")}}
     return {"tool": name, "result": {"status": "blocked"}}

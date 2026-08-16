@@ -1,4 +1,6 @@
 """Phase 5 — Tool-using agent: scoped, read-only support tools plus a real LangChain tool-calling loop."""
+import re
+
 from .config import settings
 from .demo_data import ORDERS
 
@@ -22,6 +24,20 @@ def call_tool(name: str, arguments: dict) -> dict:
     if name == "escalate_to_human":
         return {"status": "escalation_recommended", "reason": arguments.get("reason", "unresolved case")}
     return {"status": "tool_not_allowed", "message": f"'{name}' is not in the approved tool list."}
+
+
+def verify_referenced_order(message: str) -> dict | None:
+    """Verify an explicit order ID before producing an order-specific answer."""
+    match = re.search(r"\bORD-\d+\b", message, flags=re.IGNORECASE)
+    if not match:
+        return None
+
+    order_id = match.group(0).upper()
+    return {
+        "order_id": order_id,
+        "tool": "lookup_order",
+        "result": call_tool("lookup_order", {"order_id": order_id}),
+    }
 
 
 def _build_tools():
@@ -51,6 +67,19 @@ def _build_tools():
 
 def run_tool_agent(message: str, context: str = "", feedback: dict | None = None) -> dict:
     """Let a real LLM choose and call tools, bounded by max_tool_iterations to prevent loops."""
+    verification = verify_referenced_order(message)
+    if verification and verification["result"].get("status") == "not_found":
+        order_id = verification["order_id"]
+        return {
+            "status": "resolved",
+            "trace": [{"tool": verification["tool"], "args": {"order_id": order_id}, "result": verification["result"]}],
+            "answer": (
+                f"I could not verify order {order_id}. I cannot provide return, refund, "
+                "shipping, or warranty guidance for an unverified order. Please check the "
+                "order ID or contact human support."
+            ),
+        }
+
     if not settings.has_api_key:
         return {"status": "offline", "trace": [], "answer": "LLM is not configured (missing OPENAI_API_KEY)."}
 
@@ -82,11 +111,18 @@ def run_tool_agent(message: str, context: str = "", feedback: dict | None = None
         "and escalate_to_human. Call a tool only when the customer supplies information the tool needs "
         "(such as an order ID). Never invent an order ID or policy detail. If no order ID is given, ask for "
         "one instead of calling a tool. Ground policy answers only in the context below; if it does not "
-        "answer the question, say so explicitly.\n\nPolicy context:\n" + (context or "(no relevant policy passage retrieved)")
+        "answer the question, say so explicitly."
+        + (
+            f" The order ID {verification['order_id']} has already been verified via lookup_order; "
+            "do not claim anything beyond the verified record and supplied policy context."
+            if verification else ""
+        )
+        + "\n\nPolicy context:\n" + (context or "(no relevant policy passage retrieved)")
         + tone_instruction
     )
     messages: list = [("system", system), ("human", message)]
-    trace = []
+    trace = ([{"tool": verification["tool"], "args": {"order_id": verification["order_id"]}, "result": verification["result"]}]
+             if verification else [])
     try:
         for _ in range(settings.max_tool_iterations):
             response = model.invoke(messages)

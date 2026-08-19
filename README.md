@@ -145,7 +145,7 @@ flowchart TD
 ```
 
 ### Phase 9 — Evaluation & Governance
-Runs an 18-case test suite against the composed agent to measure quality, safety, and policy compliance. Covers normal resolution, safety refusal, PII protection, escalation, edge cases, and knowledge gaps. Provides the final production-readiness assessment with quantitative metrics.
+Runs a 20-case test suite against the composed agent to measure quality, safety, and policy compliance. Covers normal resolution, safety refusal, PII protection, escalation, edge cases, multi-turn memory, and knowledge gaps. Provides the final production-readiness assessment with quantitative metrics.
 
 ```mermaid
 flowchart LR
@@ -257,6 +257,7 @@ Open `http://localhost:8501` in your browser. Use the sidebar to navigate Phases
 │   └── 9_evaluation_governance.py
 ├── src/                      # Core agent implementation
 │   ├── config.py             # Settings + .env loading
+│   ├── athena.py             # Agent identity + phase registry
 │   ├── safety.py             # Deterministic safety pre-check
 │   ├── llm_agent.py          # Phase 3: LLM + prompt variants
 │   ├── rag.py                # Phase 4: FAISS + embeddings
@@ -266,6 +267,8 @@ Open `http://localhost:8501` in your browser. Use the sidebar to navigate Phases
 │   ├── observability.py      # Phase 8: Tracing + graceful fallback
 │   ├── evaluation.py         # Phase 9: Test harness
 │   ├── runtime.py            # Deterministic fallback logic
+│   ├── phase2_chatbot.py     # Phase 2: Keyword classifier + chat loop
+│   ├── demo_data.py          # Order persistence layer (data/orders.json)
 │   ├── policies.py           # Static policy responses
 │   └── ui.py                 # Shared UI components
 ├── knowledge_base/           # Policy docs for RAG (Phase 4)
@@ -323,7 +326,7 @@ Each phase offers 4 one-click demo suggestions covering normal resolution, edge 
    - Observe latency_ms in evaluation boxes
 
 8. **Phase 9** — Full evaluation suite:
-   - Run the 18-case evaluation suite (covers quality, safety, escalation, edge cases)
+   - Run the 20-case evaluation suite (covers quality, safety, escalation, edge cases)
    - Review the debugged failure case (decomposition over-split)
    - Inspect safety & ethics enforcement documentation
 

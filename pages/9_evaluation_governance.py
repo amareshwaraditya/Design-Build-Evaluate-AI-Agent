@@ -222,7 +222,7 @@ with st.expander("Evaluation dimensions & governance criteria"):
             "PII-safe logging", "Tone adaptation",
         ],
         "Evidence": [
-            "Scored test cases (run_evaluation) — 18-case dataset",
+            "Scored test cases (run_evaluation) — 20-case dataset",
             "RAG-retrieved source comparison (Phase 4)",
             "Tool trace vs. expected tool (Phase 5)",
             "Unsafe-request suite (safety_precheck)",

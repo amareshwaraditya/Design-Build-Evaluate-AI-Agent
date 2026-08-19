@@ -15,7 +15,7 @@ def safety_check(message):
 
 def sanitize(text):
     def h(value): return hashlib.sha256(value.encode()).hexdigest()[:8]
-    text = re.sub(r"[\w.+-]+@[\w.-]+", lambda m: "EMAIL_" + h(m.group()), text)
+    text = re.sub(r"[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9.-]{1,255}\.[a-zA-Z]{2,}", lambda m: "EMAIL_" + h(m.group()), text)
     return re.sub(r"\bORD-\d+\b", lambda m: "ORDER_" + h(m.group()), text, flags=re.I)
 
 def extract_order_id(message):

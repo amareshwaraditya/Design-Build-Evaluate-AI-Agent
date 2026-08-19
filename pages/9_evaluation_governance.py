@@ -214,39 +214,6 @@ with st.expander("Formal evaluation suite", expanded=True):
                     st.write(c["answer"])
                     st.divider()
 
-# Analytics is rendered above the formal suite, beside the response metadata.
-if False:  # pragma: no cover
-    if langsmith_configured:
-        dashboard = get_langsmith_project_runs(limit=10)
-        runs = dashboard["runs"]
-        if runs:
-            st.table({
-                "Run": [r["name"] or "—" for r in runs],
-                "Status": [r["status"] for r in runs],
-                "Latency": [f"{r['latency_ms']}ms" if r["latency_ms"] else "—" for r in runs],
-                "Tokens": [r["total_tokens"] or "—" for r in runs],
-                "Error": [r.get("error") or "—" for r in runs],
-            })
-            st.caption(
-                f"Showing last {len(runs)} traced runs from project '{settings.langsmith_project}'. "
-                "Visit LangSmith dashboard for full analytics, cost tracking, and run comparison."
-            )
-        elif dashboard["error"]:
-            st.warning(
-                f"LangSmith tracing is enabled, but project runs could not be loaded. "
-                f"{dashboard['error']} Verify the configured endpoint and LangSmith client version.",
-                icon=":material/error_outline:",
-            )
-        else:
-            st.caption("No recent runs found in the LangSmith project. Run the evaluation suite above to generate traced data.")
-    else:
-        st.info(
-            "LangSmith is not configured. To see traced evaluation runs with token-level analytics, "
-            "set `LANGCHAIN_TRACING_V2=true` and provide a valid `LANGCHAIN_API_KEY`.\n\n"
-            "Without LangSmith, evaluation still works — pass/fail results and latency are captured locally.",
-            icon=":material/link_off:",
-        )
-
 with st.expander("Evaluation dimensions & governance criteria"):
     st.table({
         "Dimension": [

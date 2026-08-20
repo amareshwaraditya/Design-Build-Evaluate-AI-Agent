@@ -19,8 +19,7 @@ A case passes when its expected route and required answer behavior are observed.
 | Multi-turn | contextual follow-up and session continuity | 85% |
 | **Overall** | **20-case evaluation suite** | **89%** |
 
-The category scores are shown in `docs/eval_chart.png` / the supplied evaluation chart. The 20-case count is the authoritative dataset size; older references to a 10- or 18-case suite are stale and should be removed.
-
+ The 20-case count is the  dataset size used to cut across multiple evaluation categories.
 ## Full-response evidence
 
 - `normal_return`: a 45-day purchase correctly receives store credit only under the 31–60-day late-return tier, with unused/original-packaging conditions and a 15% restocking fee.

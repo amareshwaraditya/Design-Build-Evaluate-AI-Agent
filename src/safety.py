@@ -47,7 +47,7 @@ def sanitize_for_log(text: str) -> str:
     def digest(value: str) -> str:
         return hashlib.sha256(value.encode()).hexdigest()[:10]
 
-    text = re.sub(r"[\w.+-]+@[\w.-]+", lambda m: f"EMAIL_{digest(m.group())}", text)
-    text = re.sub(r"\b(?:\+?\d[\d ()-]{8,}\d)\b", lambda m: f"PHONE_{digest(m.group())}", text)
+    text = re.sub(r"[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9.-]{1,255}\.[a-zA-Z]{2,}", lambda m: f"EMAIL_{digest(m.group())}", text)
+    text = re.sub(r"\b(?:\+?\d[\d ()-]{8,30}\d)\b", lambda m: f"PHONE_{digest(m.group())}", text)
     text = re.sub(r"\bORD-\d+\b", lambda m: f"ORDER_{digest(m.group())}", text, flags=re.I)
     return text

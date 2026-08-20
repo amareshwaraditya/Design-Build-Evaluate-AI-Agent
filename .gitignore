@@ -7,6 +7,5 @@ __pycache__/
 Capstone_Project_*.zip
 logs/phase2_baseline.log
 logs/phase2_baseline.jsonl
+streamlit.log
 streamlit-error.log
-logs/phase2_baseline.jsonl
-logs/phase2_baseline.log
